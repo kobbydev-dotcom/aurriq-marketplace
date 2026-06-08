@@ -5682,73 +5682,63 @@
   inherits: false;
   initial-value: 0;
 }
+@import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600&family=Jost:wght@300;400;500;600&display=swap');
+
 :root {
-  --radius: 0.375rem;
-  --background: oklch(0.09 0.01 60);
-  --foreground: oklch(0.97 0.02 80);
-  --card: oklch(0.12 0.015 60);
-  --card-foreground: oklch(0.97 0.02 80);
-  --popover: oklch(0.12 0.015 60);
-  --popover-foreground: oklch(0.97 0.02 80);
-  --primary: oklch(0.78 0.15 75);
-  --primary-foreground: oklch(0.09 0.01 60);
-  --secondary: oklch(0.16 0.02 60);
-  --secondary-foreground: oklch(0.97 0.02 80);
-  --muted: oklch(0.16 0.02 60);
-  --muted-foreground: oklch(0.6 0.04 75);
-  --accent: oklch(0.22 0.04 70);
-  --accent-foreground: oklch(0.97 0.02 80);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.25 0.03 70);
-  --input: oklch(0.18 0.02 65);
-  --ring: oklch(0.78 0.15 75);
-  --chart-1: oklch(0.78 0.15 75);
-  --chart-2: oklch(0.65 0.12 55);
-  --chart-3: oklch(0.55 0.1 40);
-  --chart-4: oklch(0.7 0.13 85);
-  --chart-5: oklch(0.6 0.1 95);
-  --sidebar: oklch(0.11 0.012 60);
-  --sidebar-foreground: oklch(0.97 0.02 80);
-  --sidebar-primary: oklch(0.78 0.15 75);
-  --sidebar-primary-foreground: oklch(0.09 0.01 60);
-  --sidebar-accent: oklch(0.18 0.025 65);
-  --sidebar-accent-foreground: oklch(0.97 0.02 80);
-  --sidebar-border: oklch(0.22 0.025 65);
-  --sidebar-ring: oklch(0.78 0.15 75);
+  --background: 40 20% 97%;
+  --foreground: 30 10% 12%;
+  --card: 0 0% 100%;
+  --card-foreground: 30 10% 12%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 30 10% 12%;
+  --primary: 38 72% 44%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 30 15% 93%;
+  --secondary-foreground: 30 10% 12%;
+  --muted: 30 10% 93%;
+  --muted-foreground: 30 8% 46%;
+  --accent: 38 60% 90%;
+  --accent-foreground: 38 72% 30%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 30 12% 88%;
+  --input: 30 12% 88%;
+  --ring: 38 72% 44%;
+  --radius: 0.5rem;
+  --font-sans: 'Jost', sans-serif;
+  --font-serif: 'Cormorant Garamond', serif;
 }
+
 .dark {
-  --background: oklch(0.09 0.01 60);
-  --foreground: oklch(0.97 0.02 80);
-  --card: oklch(0.12 0.015 60);
-  --card-foreground: oklch(0.97 0.02 80);
-  --popover: oklch(0.12 0.015 60);
-  --popover-foreground: oklch(0.97 0.02 80);
-  --primary: oklch(0.78 0.15 75);
-  --primary-foreground: oklch(0.09 0.01 60);
-  --secondary: oklch(0.16 0.02 60);
-  --secondary-foreground: oklch(0.97 0.02 80);
-  --muted: oklch(0.16 0.02 60);
-  --muted-foreground: oklch(0.6 0.04 75);
-  --accent: oklch(0.22 0.04 70);
-  --accent-foreground: oklch(0.97 0.02 80);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.25 0.03 70);
-  --input: oklch(0.18 0.02 65);
-  --ring: oklch(0.78 0.15 75);
-  --chart-1: oklch(0.78 0.15 75);
-  --chart-2: oklch(0.65 0.12 55);
-  --chart-3: oklch(0.55 0.1 40);
-  --chart-4: oklch(0.7 0.13 85);
-  --chart-5: oklch(0.6 0.1 95);
-  --sidebar: oklch(0.11 0.012 60);
-  --sidebar-foreground: oklch(0.97 0.02 80);
-  --sidebar-primary: oklch(0.78 0.15 75);
-  --sidebar-primary-foreground: oklch(0.09 0.01 60);
-  --sidebar-accent: oklch(0.18 0.025 65);
-  --sidebar-accent-foreground: oklch(0.97 0.02 80);
-  --sidebar-border: oklch(0.22 0.025 65);
-  --sidebar-ring: oklch(0.78 0.15 75);
+  --background: 30 10% 8%;
+  --foreground: 40 20% 95%;
+  --card: 30 10% 11%;
+  --card-foreground: 40 20% 95%;
+  --popover: 30 10% 11%;
+  --popover-foreground: 40 20% 95%;
+  --primary: 38 72% 52%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 30 10% 16%;
+  --secondary-foreground: 40 20% 95%;
+  --muted: 30 10% 16%;
+  --muted-foreground: 30 8% 60%;
+  --accent: 38 40% 20%;
+  --accent-foreground: 38 72% 65%;
+  --destructive: 0 62% 40%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 30 10% 20%;
+  --input: 30 10% 20%;
+  --ring: 38 72% 52%;
 }
+
+body {
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3 {
+  font-family: var(--font-serif);
+}
+
 @layer base {
   * {
     border-color: var(--border);
