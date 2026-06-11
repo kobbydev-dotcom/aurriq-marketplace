@@ -9,11 +9,10 @@ export default function SSOLandingPage() {
   useEffect(() => {
     const token = params.get("token");
     if (!token) {
-      navigate("/"); 
+      navigate("/");
       return;
     }
 
-    // Use the correct main app domain
     fetch("https://kobby.doabookpro.com/api/auth/verify-sso", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -26,23 +25,23 @@ export default function SSOLandingPage() {
           localStorage.setItem("marketplace_seller_subdomain", data.subdomain || "");
           
           console.log("[SSO Success] Logged in seller:", data.seller_id);
-          navigate("/seller/dashboard");   // Change this if your dashboard route is different
+          navigate("/seller/dashboard");
         } else {
-          console.log("[SSO Failed]", data);
-          navigate("/?error=invalid-sso");
+          // If token verification fails or no seller_id, go to homepage
+          navigate("/");
         }
       })
       .catch((err) => {
         console.error("[SSO Error]", err);
-        navigate("/?error=sso-failed");
+        navigate("/");
       })
       .finally(() => setLoading(false));
   }, [navigate, params]);
 
   if (loading) {
     return (
-      <div style={{ padding: "80px 40px", textAlign: "center", fontSize: "18px" }}>
-        Signing you in securely…
+      <div style={{ padding: "100px 20px", textAlign: "center", fontSize: "18px" }}>
+        Connecting to marketplace...
       </div>
     );
   }
