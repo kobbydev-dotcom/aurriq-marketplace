@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { api } from "../../../convex/_generated/api.js";
 import { Flag, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import {
@@ -16,7 +16,7 @@ import { Textarea } from "@/components/ui/textarea.tsx";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group.tsx";
 import { toast } from "sonner";
 import { ConvexError } from "convex/values";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import type { Id } from "../../../convex/_generated/dataModel.d.ts";
 
 const REPORT_REASONS = [
   "Counterfeit / fake product",

@@ -1,5 +1,5 @@
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { api } from "../../../convex/_generated/api.js";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { Link, useNavigate } from "react-router-dom";
 import { useState } from "react";
@@ -20,7 +20,7 @@ import {
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import type { Id } from "../../../convex/_generated/dataModel.d.ts";
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amount);

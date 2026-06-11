@@ -111,9 +111,9 @@ export const listReports = query({
         const seller = r.targetSellerId ? await ctx.db.get(r.targetSellerId) : null;
         return {
           ...r,
-          reporterName: reporter?.name ?? "Unknown",
-          productName: product?.name ?? null,
-          sellerName: seller?.name ?? null,
+          reporterName: (reporter as any)?.name ?? "Unknown",
+          productName: (product as any)?.name ?? null,
+          sellerName: (seller as any)?.name ?? null,
         };
       })
     );

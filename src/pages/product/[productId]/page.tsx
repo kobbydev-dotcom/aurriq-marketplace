@@ -1,6 +1,6 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { api } from "../../../../convex/_generated/api.js";
 import { useState } from "react";
 import { ShoppingCart, MessageCircle, Phone, ArrowLeft, Package, ChevronLeft, ChevronRight, Loader2, Plus, Minus, Flag } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
@@ -10,7 +10,7 @@ import { Authenticated, Unauthenticated } from "convex/react";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { toast } from "sonner";
 import { ConvexError } from "convex/values";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import type { Id } from "../../../../convex/_generated/dataModel.d.ts";
 import { VerifiedBadge } from "@/components/trust/VerifiedBadge.tsx";
 import { TrustSafetyBanner } from "@/components/trust/TrustSafetyBanner.tsx";
 import { ReportDialog } from "@/components/trust/ReportDialog.tsx";

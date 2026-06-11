@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { api } from "../../../convex/_generated/api.js";
 import { useSearchParams, Link } from "react-router-dom";
 import { Search, Package } from "lucide-react";
 import { Input } from "@/components/ui/input.tsx";
@@ -10,7 +10,7 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/
 import { useDebounce } from "@/hooks/use-debounce.ts";
 import { cn } from "@/lib/utils.ts";
 import { VerifiedBadge } from "@/components/trust/VerifiedBadge.tsx";
-import { Id } from "@/convex/_generated/dataModel"; // Imported to type-cast the sellerId safely
+import { Id } from "../../../convex/_generated/dataModel"; // Imported to type-cast the sellerId safely
 
 const CATEGORIES = [
   { value: "", label: "All" },

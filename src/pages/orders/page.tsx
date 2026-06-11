@@ -1,5 +1,5 @@
 import { useQuery } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { api } from "../../../convex/_generated/api.js";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { Link } from "react-router-dom";
 import { Package, ArrowLeft, Clock, CheckCircle, Truck, XCircle, PackageCheck } from "lucide-react";

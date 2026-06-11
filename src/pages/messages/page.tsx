@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { api } from "../../../convex/_generated/api.js";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { formatDistanceToNow } from "date-fns";
 import { Send, Phone, MessageSquare, ArrowLeft, Inbox } from "lucide-react";
@@ -10,7 +10,7 @@ import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { cn } from "@/lib/utils.ts";
 import { toast } from "sonner";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import type { Id } from "../../../convex/_generated/dataModel.d.ts";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription } from "@/components/ui/empty.tsx";
 
 type Conversation = {

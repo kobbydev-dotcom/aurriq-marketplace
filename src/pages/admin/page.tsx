@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { api } from "../../../convex/_generated/api.js";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import {
   ShieldCheck, Users, Flag, CheckCircle, XCircle, Clock,
@@ -21,7 +21,7 @@ import { toast } from "sonner";
 import { ConvexError } from "convex/values";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { formatDistanceToNow } from "date-fns";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import type { Id } from "../../../convex/_generated/dataModel.d.ts";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue
 } from "@/components/ui/select.tsx";

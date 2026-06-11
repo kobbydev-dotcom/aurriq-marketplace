@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { api } from "../../../../../convex/_generated/api.js";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import {
@@ -34,7 +34,7 @@ import {
 } from "@/components/ui/alert-dialog.tsx";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty.tsx";
 import ProductFormDialog from "@/pages/seller/dashboard/_components/ProductFormDialog.tsx";
-import type { Doc } from "@/convex/_generated/dataModel.d.ts";
+import type { Doc } from "../../../../../convex/_generated/dataModel.d.ts";
 import {
   Select,
   SelectContent,

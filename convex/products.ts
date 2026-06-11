@@ -212,8 +212,8 @@ export const listProducts = query({
         const seller = await ctx.db.get(p.sellerId);
         return {
           ...p,
-          sellerName: seller?.name ?? "Unknown Seller",
-          sellerIsVerified: seller?.isVerified ?? false,
+          sellerName: (seller as any)?.name ?? "Unknown Seller",
+          sellerIsVerified: (seller as any)?.isVerified ?? false,
         };
       })
     );

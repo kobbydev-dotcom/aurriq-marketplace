@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "convex/react";
-import { api } from "@/convex/_generated/api.js";
+import { api } from "../../../../../convex/_generated/api.js";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import {
@@ -21,7 +21,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog.tsx";
 import { Label } from "@/components/ui/label.tsx";
-import type { Id } from "@/convex/_generated/dataModel.d.ts";
+import type { Id } from "../../../../../convex/_generated/dataModel.d.ts";
 
 function formatCurrency(n: number) {
   return new Intl.NumberFormat("en-NG", {
