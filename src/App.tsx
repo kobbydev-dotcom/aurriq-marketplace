@@ -13,6 +13,8 @@ import NotFoundPage from "./pages/NotFound.tsx";
 import SSOLandingPage from "./pages/admin/SSOLandingPage.tsx";
 import SellerDashboardPage from "./pages/seller/dashboard/page.tsx";
 
+import { Toaster } from "./components/ui/sonner";   // ← Add this import
+
 export default function App() {
   return (
     <DefaultProviders>
@@ -31,6 +33,10 @@ export default function App() {
           <Route path="/seller/dashboard" element={<SellerDashboardPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
+
+        {/* Add the Toaster here (outside Routes but inside BrowserRouter) */}
+        <Toaster position="top-center" richColors />
+
       </BrowserRouter>
     </DefaultProviders>
   );
