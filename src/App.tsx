@@ -13,15 +13,18 @@ import NotFoundPage from "./pages/NotFound.tsx";
 import SSOLandingPage from "./pages/admin/SSOLandingPage.tsx";
 import SellerDashboardPage from "./pages/seller/dashboard/page.tsx";
 
-import { Toaster } from "./components/ui/sonner";   // ← Add this import
+import { Toaster } from "./components/ui/sonner";
 
 export default function App() {
   return (
     <DefaultProviders>
       <BrowserRouter>
         <Routes>
+          {/* Home page gets its own luxury header — NOT inside AppLayout */}
+          <Route path="/" element={<HomePage />} />
+
+          {/* All inner app pages use AppLayout's navbar */}
           <Route element={<AppLayout />}>
-            <Route path="/" element={<HomePage />} />
             <Route path="/shop" element={<ShopPage />} />
             <Route path="/cart" element={<CartPage />} />
             <Route path="/orders" element={<OrdersPage />} />
@@ -34,9 +37,7 @@ export default function App() {
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
 
-        {/* Add the Toaster here (outside Routes but inside BrowserRouter) */}
         <Toaster position="top-center" richColors />
-
       </BrowserRouter>
     </DefaultProviders>
   );
