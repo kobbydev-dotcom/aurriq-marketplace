@@ -5,6 +5,7 @@ import { Unauthenticated } from "convex/react";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import SiteHeader from "@/components/site-header.tsx";
 import { CATEGORIES } from "@/lib/constants.ts";
+import { motion } from "motion/react";
 
 const TRUST_POINTS = [
   { icon: Shield, title: "Buyer Protection", desc: "Every order is protected. Report issues within 48 hours." },
@@ -54,31 +55,45 @@ export default function Index() {
 
         {/* All hero content inside this wrapper */}
         <div className="relative z-10 w-full flex flex-col items-center text-center px-6 pb-32">
-          <div
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: "easeOut", delay: 0.1 }}
             className="inline-flex items-center gap-2 px-4 py-1 rounded-full mb-12 uppercase"
-            style={{ border: "1px solid rgba(212,175,55,0.45)", color: "#C9920A", background: "rgba(15,11,0,0.85)", fontSize: "12px", letterSpacing: "0.1em", fontWeight: 100, fontFamily: "'Cormorant Garamond', serif", }}
+            style={{ border: "1px solid rgba(212,175,55,0.45)", color: "#C9920A", background: "rgba(15,11,0,0.85)", fontSize: "12px", letterSpacing: "0.1em", fontWeight: 100, fontFamily: "'Cormorant Garamond', serif" }}
           >
             <span style={{ color: "#C9920A", fontSize: "10px" }}>●</span>
             Africa's Beauty &amp; Personal Care Marketplace
-          </div>
+          </motion.div>
 
-          <h1
+          <motion.h1
+            initial={{ opacity: 0, y: 32 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.9, ease: "easeOut", delay: 0.3 }}
             className="font-light leading-[1.05] text-[#F0EAE0] mb-4"
             style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: "clamp(4.2rem, 7vw, 5.5rem)", letterSpacing: "0.01em" }}
           >
             Beauty,{" "}
             <em style={{ color: "rgba(195, 126, 26, 1)", fontStyle: "italic" }}>Redefined.</em>
-          </h1>
+          </motion.h1>
 
-          <p
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, ease: "easeOut", delay: 0.5 }}
             className="max-w-2xl font-light leading-[1.8] mb-10 text-center"
             style={{ fontFamily: "'Book Antiqua', serif", color: "rgba(177, 164, 144, 0.4)", fontSize: "17px" }}
           >
             Discover premium hair, cosmetics, skincare, and personal care products
             from verified sellers — all in one place.
-          </p>
+          </motion.p>
 
-          <div className="flex flex-wrap items-center justify-center gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.7, ease: "easeOut", delay: 0.7 }}
+            className="flex flex-wrap items-center justify-center gap-4"
+          >
             <Button
               size="lg"
               asChild
@@ -104,18 +119,29 @@ export default function Index() {
             >
               <Link to="/seller/dashboard">Start Selling</Link>
             </Button>
-          </div>
+          </motion.div>
         </div>
 
-        <div className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10">
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 1, delay: 1.1 }}
+          className="absolute bottom-8 left-1/2 -translate-x-1/2 z-10"
+        >
           <div className="w-px h-12" style={{ background: "linear-gradient(to bottom, rgba(212,175,55,0.4), transparent)" }} />
-        </div>
+        </motion.div>
       </section>
 
       {/* Categories */}
       <section className="py-20 px-8 md:px-16 border-t" style={{ borderColor: "#1A1600" }}>
         <div className="max-w-5xl mx-auto">
-          <div className="text-center mb-10">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: false, margin: "-80px" }}
+            transition={{ duration: 0.7, ease: "easeOut" }}
+            className="text-center mb-10"
+          >
             <p className="uppercase tracking-[0.45em] mb-4 font-medium" style={{ color: "rgba(195, 126, 26, 1)", fontSize: "12px", fontFamily: "'Algeria', serif" }}>Browse By</p>
             <h2
               className="font-light text-[#F0EAE0]"
@@ -123,32 +149,39 @@ export default function Index() {
             >
               Shop By Category
             </h2>
-          </div>
+          </motion.div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-5">
-            {CATEGORIES.map((cat) => (
-              <Link
+            {CATEGORIES.map((cat, i) => (
+              <motion.div
                 key={cat.slug}
-                to={`/shop?category=${cat.slug}`}
-                className="group flex flex-col items-center text-center px-4 py-5 transition-all duration-300 cursor-pointer"
-                style={{ border: "1px solid #1E1A00", background: "#0D0A00", borderRadius: "10px" }}
-                onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(212,175,55,0.3)"; }}
-                onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1E1A00"; }}
+                initial={{ opacity: 0, y: 20 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: false, margin: "-60px" }}
+                transition={{ duration: 0.5, ease: "easeOut", delay: i * 0.07 }}
               >
-                <div
-                  className="size-10 mb-4 rounded-full flex items-center justify-center group-hover:scale-105 transition-transform duration-500"
-                  style={{ background: CATEGORY_CIRCLE[cat.slug] ?? "radial-gradient(circle, #1a1a1a, #0d0d0d)" }}
+                <Link
+                  to={`/shop?category=${cat.slug}`}
+                  className="group flex flex-col items-center text-center px-4 py-5 transition-all duration-300 cursor-pointer"
+                  style={{ border: "1px solid #1E1A00", background: "#0D0A00", borderRadius: "10px" }}
+                  onMouseEnter={(e) => { e.currentTarget.style.borderColor = "rgba(212,175,55,0.3)"; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.borderColor = "#1E1A00"; }}
                 >
-                  <span className="text-3xl">{cat.emoji}</span>
-                </div>
-                <p
-                  className="text-[15px] font-light text-[#D9D2C8] group-hover:text-[#D4AF37] transition-colors duration-300 mb-1.5"
-                  style={{ fontFamily: "'Cormorant Garamond', serif" }}
-                >
-                  {cat.label}
-                </p>
-                <p className="text-[11px] text-[#5A5448] leading-relaxed">{cat.desc}</p>
-              </Link>
+                  <div
+                    className="size-10 mb-4 rounded-full flex items-center justify-center group-hover:scale-105 transition-transform duration-500"
+                    style={{ background: CATEGORY_CIRCLE[cat.slug] ?? "radial-gradient(circle, #1a1a1a, #0d0d0d)" }}
+                  >
+                    <span className="text-3xl">{cat.emoji}</span>
+                  </div>
+                  <p
+                    className="text-[15px] font-light text-[#D9D2C8] group-hover:text-[#D4AF37] transition-colors duration-300 mb-1.5"
+                    style={{ fontFamily: "'Cormorant Garamond', serif" }}
+                  >
+                    {cat.label}
+                  </p>
+                  <p className="text-[11px] text-[#5A5448] leading-relaxed">{cat.desc}</p>
+                </Link>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -159,7 +192,14 @@ export default function Index() {
         <div className="max-w-5xl mx-auto">
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-0 divide-x divide-[#1A1600]">
             {TRUST_POINTS.map((point, i) => (
-              <div key={i} className="flex flex-col gap-3 px-10 py-8">
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, y: 16 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                viewport={{ once: false, margin: "-60px" }}
+                transition={{ duration: 0.5, ease: "easeOut", delay: i * 0.1 }}
+                className="flex flex-col gap-3 px-10 py-8"
+              >
                 <div className="flex items-center gap-3 mb-1">
                   <div
                     className="size-8 flex items-center justify-center rounded flex-shrink-0"
@@ -175,7 +215,7 @@ export default function Index() {
                   </h3>
                 </div>
                 <p className="text-[11px] text-[#5A5448] leading-[1.8]">{point.desc}</p>
-              </div>
+              </motion.div>
             ))}
           </div>
         </div>
@@ -199,7 +239,13 @@ export default function Index() {
             backgroundSize: "70px 70px",
           }}
         />
-        <div className="relative max-w-3xl mx-auto text-center">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: false, margin: "-80px" }}
+          transition={{ duration: 0.8, ease: "easeOut" }}
+          className="relative max-w-3xl mx-auto text-center"
+        >
           <p className="uppercase tracking-[0.45em] mb-6 font-medium" style={{ color: "rgba(195, 126, 26, 1)", fontSize: "12px", fontFamily: "'Bell MT', serif" }}>For Sellers</p>
           <h2
             className="font-light text-[#F0EAE0] mb-7"
@@ -221,13 +267,19 @@ export default function Index() {
           >
             <Link to="/seller/dashboard">Open Seller Dashboard <ArrowRight className="ml-5 size-2.5" /></Link>
           </Button>
-        </div>
+        </motion.div>
       </section>
 
       {/* Footer */}
       <footer className="border-t pt-4 pb-16 px-20 md:px-10" style={{ borderColor: "#1A1600" }}>
         <div className="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-10">
-          <div className="flex flex-col gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: false, margin: "0px" }}
+            transition={{ duration: 0.6, ease: "easeOut", delay: 0 }}
+            className="flex flex-col gap-4"
+          >
             <div className="flex items-center gap-2">
               <span className="text-xs" style={{ color: "rgba(212,175,55,0.6)" }}>✦</span>
               <span
@@ -240,9 +292,15 @@ export default function Index() {
             <p className="text-[12px] leading-[1.9] max-w-[280px]" style={{ color: "#4A4030" }}>
               The beauty &amp; personal care marketplace built for Africa's finest brands and buyers.
             </p>
-          </div>
+          </motion.div>
 
-          <div className="flex flex-col gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: false, margin: "0px" }}
+            transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }}
+            className="flex flex-col gap-4"
+          >
             <p className="text-[10px] uppercase tracking-[0.35em] font-semibold" style={{ color: "rgba(195, 126, 26, 0.5)" }}>
               Shop By Category
             </p>
@@ -258,9 +316,15 @@ export default function Index() {
                 </Link>
               ))}
             </div>
-          </div>
+          </motion.div>
 
-          <div className="flex flex-col gap-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: false, margin: "0px" }}
+            transition={{ duration: 0.6, ease: "easeOut", delay: 0.2 }}
+            className="flex flex-col gap-4"
+          >
             <p className="text-[10px] uppercase tracking-[0.35em] font-semibold" style={{ color: "rgba(195, 126, 26, 0.5)" }}>
               Sellers
             </p>
@@ -273,14 +337,21 @@ export default function Index() {
                 style={{ background: "#D4AF37", color: "#0A0800", height: "30px" }}
               />
             </Unauthenticated>
-          </div>
+          </motion.div>
         </div>
 
-        <div className="mt-1 border-t py-2 text-center" style={{ borderColor: "#1A1600" }}>
+        <motion.div
+          initial={{ opacity: 0 }}
+          whileInView={{ opacity: 1 }}
+          viewport={{ once: false, margin: "0px" }}
+          transition={{ duration: 0.6, ease: "easeOut", delay: 0.3 }}
+          className="mt-1 border-t py-2 text-center"
+          style={{ borderColor: "#1A1600" }}
+        >
           <p className="text-[11px] tracking-widest" style={{ color: "#625516" }}>
             © {new Date().getFullYear()} Aurriq. All rights reserved.
           </p>
-        </div>
+        </motion.div>
       </footer>
     </div>
   );

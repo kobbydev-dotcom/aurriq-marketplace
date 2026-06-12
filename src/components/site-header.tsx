@@ -4,6 +4,7 @@ import { SignInButton } from "@/components/ui/signin.tsx";
 import { ShoppingCart, Menu, X } from "lucide-react";
 import { useState, useEffect } from "react";
 import { CATEGORIES } from "@/lib/constants.ts";
+import { motion } from "motion/react";
 
 const NAV_LINKS = [
   { label: "Home", href: "/" },
@@ -25,7 +26,10 @@ export default function SiteHeader() {
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
   return (
-    <header
+    <motion.header
+      initial={{ opacity: 0, y: -20 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.6, ease: "easeOut" }}
       className="fixed top-0 left-0 right-0 z-50 transition-all duration-500"
       style={{
         background: scrolled ? "rgba(6,4,0,0.96)" : "rgba(8,5,0,0.88)",
@@ -228,6 +232,6 @@ export default function SiteHeader() {
           </Unauthenticated>
         </div>
       )}
-    </header>
+    </motion.header>
   );
 }
