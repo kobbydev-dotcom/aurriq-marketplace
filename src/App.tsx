@@ -1,45 +1,53 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Authenticated, Unauthenticated, AuthLoading } from "convex/react"; // 1. Import these
 import { DefaultProviders } from "./components/providers/default.tsx";
-import AppLayout from "./pages/_components/AppLayout.tsx";
-
-import HomePage from "./pages/Index.tsx";
-import ShopPage from "./pages/shop/page.tsx";
-import CartPage from "./pages/cart/page.tsx";
-import OrdersPage from "./pages/orders/page.tsx";
-import MessagesPage from "./pages/messages/page.tsx";
-import ProfilePage from "./pages/profile/page";
-import ProductDetailPage from "./pages/product/[productId]/page.tsx";
-import NotFoundPage from "./pages/NotFound.tsx";
-
-import SSOLandingPage from "./pages/admin/SSOLandingPage.tsx";
-import SellerDashboardPage from "./pages/seller/dashboard/page.tsx";
-import AuthPage from "./pages/auth/page.tsx";
-
-import { Toaster } from "./components/ui/sonner";
+// ... (keep all your other imports)
 
 export default function App() {
   return (
     <DefaultProviders>
       <BrowserRouter>
+        {/* 2. Add AuthLoading to prevent flickering/loops while checking status */}
+        <AuthLoading>
+          <div className="flex h-screen w-full items-center justify-center bg-[#0A0600] text-[#C9930A]">
+            Loading...
+          </div>
+        </AuthLoading>
+
         <Routes>
+          {/* Public Routes */}
           <Route path="/" element={<HomePage />} />
-
-          <Route element={<AppLayout />}>
-            <Route path="/shop" element={<ShopPage />} />
-            <Route path="/cart" element={<CartPage />} />
-            <Route path="/orders" element={<OrdersPage />} />
-            <Route path="/messages" element={<MessagesPage />} />
-            <Route path="/profile" element={<ProfilePage />} />
-            <Route path="/product/:productId" element={<ProductDetailPage />} />
-          </Route>
-
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/admin/sso" element={<SSOLandingPage />} />
-          <Route path="/seller/dashboard" element={<SellerDashboardPage />} />
+          
+          {/* Protected Routes (Wrapped in Authenticated) */}
+          <Route element={<AuthenticatedWrapper />}>
+            <Route element={<AppLayout />}>
+              <Route path="/shop" element={<ShopPage />} />
+              <Route path="/cart" element={<CartPage />} />
+              <Route path="/orders" element={<OrdersPage />} />
+              <Route path="/messages" element={<MessagesPage />} />
+              <Route path="/profile" element={<ProfilePage />} />
+              <Route path="/seller/dashboard" element={<SellerDashboardPage />} />
+              <Route path="/product/:productId" element={<ProductDetailPage />} />
+            </Route>
+          </Route>
+
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
         <Toaster position="top-center" richColors />
       </BrowserRouter>
     </DefaultProviders>
+  );
+}
+
+// 3. Create a helper component to force redirect
+import { Outlet, Navigate } from "react-router-dom";
+
+function AuthenticatedWrapper() {
+  return (
+    <Authenticated>
+      <Outlet />
+    </Authenticated>
   );
 }
