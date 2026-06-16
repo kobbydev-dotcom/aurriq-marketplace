@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { ShoppingBag, ShoppingCart, MessageSquare, ClipboardList, LayoutDashboard, LogOut } from "lucide-react";
+import { ShoppingBag, ShoppingCart, MessageSquare, ClipboardList, LayoutDashboard, LogOut, User } from "lucide-react";
 import { Authenticated, Unauthenticated } from "convex/react";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { useAuth } from "@/hooks/use-auth.ts";
@@ -63,6 +63,9 @@ export default function AppLayout() {
               <>
                 <Unauthenticated><SignInButton /></Unauthenticated>
                 <Authenticated>
+                  <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground" onClick={() => navigate("/profile")}>
+                    <User className="size-3.5" /> Profile
+                  </Button>
                   <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground" onClick={handleSignOut}>
                     <LogOut className="size-3.5" /> Sign Out
                   </Button>

@@ -8,19 +8,22 @@ export default defineSchema({
 
   // 2. Extends your existing user profile table with Convex Auth tracking attributes
   users: defineTable({
-    // Native properties needed by Convex Auth
-    name: v.optional(v.string()),
-    email: v.optional(v.string()),
-    image: v.optional(v.string()),
+      // Native properties
+      name: v.optional(v.string()),
+      email: v.optional(v.string()),
+      image: v.optional(v.string()),
+      emailVerificationTime: v.optional(v.number()), // <--- Add this!
 
-    // Your custom marketplace specific metadata properties
-    tokenIdentifier: v.optional(v.string()), // Made optional to simplify credentials pairing
-    isSeller: v.boolean(),
-    isVerified: v.boolean(),
-    phone: v.optional(v.string()),
-    avatar: v.optional(v.string()),
-    role: v.optional(v.string()), 
-  }).index("by_token", ["tokenIdentifier"]),
+      // Custom metadata
+      isSeller: v.optional(v.boolean()), 
+      isVerified: v.optional(v.boolean()),
+      tokenIdentifier: v.optional(v.string()),
+      phone: v.optional(v.string()),
+      avatar: v.optional(v.string()),
+      role: v.optional(v.string()), 
+    })
+    .index("by_token", ["tokenIdentifier"])
+    .index("email", ["email"]),
 
   products: defineTable({
     title: v.optional(v.string()), 
@@ -81,9 +84,9 @@ export default defineSchema({
 
   orders: defineTable({
     userId: v.id("users"),
-    buyerId: v.id("users"),          
-    sellerId: v.id("users"),         
-    productId: v.id("products"),     
+    buyerId: v.id("users"),           
+    sellerId: v.id("users"),          
+    productId: v.id("products"),    
     totalAmount: v.number(),
     status: v.string(),
     quantity: v.optional(v.number()), 
