@@ -36,7 +36,8 @@ export default function SiteHeader() {
 
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
-  const getInitials = (name: string) => {
+  const getInitials = (name: string | undefined | null) => {
+    if (!name) return "U";
     return name
       .split(" ")
       .filter((n) => n.length > 0)
@@ -102,7 +103,7 @@ export default function SiteHeader() {
                   className="hidden md:flex items-center justify-center rounded-full text-xs transition-all flex-shrink-0 hover:scale-105"
                   style={{ background: "#C9930A", color: "#0A0600", height: "36px", width: "36px", fontWeight: 600, cursor: "pointer" }}
                 >
-                  {user === undefined ? "" : user?.name ? getInitials(user.name) : "U"}
+                  {user === undefined ? "" : getInitials(user?.name)}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 bg-[#0A0600] border-[#C9930A]/20 text-[#F0EAE0]">
