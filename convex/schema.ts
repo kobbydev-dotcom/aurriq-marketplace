@@ -8,6 +8,7 @@ export default defineSchema({
 
   // 2. Extends your existing user profile table with Convex Auth tracking attributes
   users: defineTable({
+<<<<<<< HEAD
     // Native properties needed by Convex Auth
     name: v.optional(v.string()),
     email: v.optional(v.string()),
@@ -21,6 +22,24 @@ export default defineSchema({
     avatar: v.optional(v.string()),
     role: v.optional(v.string()), 
   }).index("by_token", ["tokenIdentifier"]),
+=======
+      // Native properties
+      name: v.optional(v.string()),
+      email: v.optional(v.string()),
+      image: v.optional(v.string()),
+      emailVerificationTime: v.optional(v.number()), // <--- Add this!
+
+      // Custom metadata
+      isSeller: v.optional(v.boolean()), 
+      isVerified: v.optional(v.boolean()),
+      tokenIdentifier: v.optional(v.string()),
+      phone: v.optional(v.string()),
+      avatar: v.optional(v.string()),
+      role: v.optional(v.string()), 
+    })
+    .index("by_token", ["tokenIdentifier"])
+    .index("email", ["email"]),
+>>>>>>> temp-clean-branch
 
   products: defineTable({
     title: v.optional(v.string()), 
@@ -81,9 +100,15 @@ export default defineSchema({
 
   orders: defineTable({
     userId: v.id("users"),
+<<<<<<< HEAD
     buyerId: v.id("users"),          
     sellerId: v.id("users"),         
     productId: v.id("products"),     
+=======
+    buyerId: v.id("users"),           
+    sellerId: v.id("users"),          
+    productId: v.id("products"),    
+>>>>>>> temp-clean-branch
     totalAmount: v.number(),
     status: v.string(),
     quantity: v.optional(v.number()), 
