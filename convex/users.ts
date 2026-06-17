@@ -9,17 +9,16 @@ export const storeUser = mutation({
       throw new Error("Called storeUser without authentication");
     }
 
+    // Using tokenIdentifier as it is the standard for Convex Auth indexes
     const user = await ctx.db
       .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
 
     const name = identity.name ?? user?.name ?? "Anonymous Buyer";
-    // Safely handle picture (some providers use picture, some pictureUrl)
     const imageUrl = identity.picture || (identity as any).pictureUrl || undefined;
 
     if (user !== null) {
-      // Update if changed
       if (user.name !== name || user.image !== imageUrl) {
         await ctx.db.patch(user._id, {
           name,
@@ -29,9 +28,8 @@ export const storeUser = mutation({
       return user._id;
     }
 
-    // First time user
     return await ctx.db.insert("users", {
-      tokenIdentifier: identity.subject,
+      tokenIdentifier: identity.tokenIdentifier!,
       name,
       image: imageUrl,
       isSeller: false,
@@ -46,12 +44,10 @@ export const current = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
-    const user = await ctx.db
+    return await ctx.db
       .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-      
-    return user;
   },
 });
 
@@ -65,17 +61,33 @@ export const updateProfile = mutation({
       throw new Error("Not authenticated");
     }
 
-    const user = await ctx.db
+    // 1. Try to find the user
+    let user = await ctx.db
       .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier!))
       .unique();
 
+    // ... inside updateProfile mutation
     if (!user) {
-      throw new Error("User not found");
+      const userId = await ctx.db.insert("users", {
+        tokenIdentifier: identity.tokenIdentifier!,
+        name: args.name.trim() || identity.name || "New User",
+        // Cast to string or undefined explicitly to satisfy TypeScript
+        image: typeof identity.picture === 'string' ? identity.picture : undefined,
+        isSeller: false,
+        isVerified: false,
+      });
+      user = await ctx.db.get(userId);
     }
 
-    await ctx.db.patch(user._id, {
-      name: args.name,
+    // 3. Now we are guaranteed that 'user' exists. Patch it.
+    const trimmedName = args.name.trim();
+    if (trimmedName.length === 0) {
+      throw new Error("Name cannot be empty");
+    }
+
+    await ctx.db.patch(user!._id, {
+      name: trimmedName,
     });
 
     return true;

@@ -1,7 +1,8 @@
+// convex/auth.config.ts
 export default {
   providers: [
     {
-      domain: "https://aurriq.doabookpro.com", // Replace this with your actual URL
+      domain: "https://trustworthy-cobra-709.convex.site/",
       applicationID: "convex",
     },
   ],

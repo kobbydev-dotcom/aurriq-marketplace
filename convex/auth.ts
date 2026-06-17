@@ -1,4 +1,5 @@
-﻿import Google from "@auth/core/providers/google";
+﻿// convex/auth.ts
+import Google from "@auth/core/providers/google"; 
 import { Password } from "@convex-dev/auth/providers/Password";
 import { convexAuth } from "@convex-dev/auth/server";
 
