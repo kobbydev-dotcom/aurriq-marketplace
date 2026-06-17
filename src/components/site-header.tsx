@@ -112,16 +112,19 @@ export default function SiteHeader() {
                     cursor: "pointer" 
                   }}
                 >
-                  {user?.image ? (
-                    <img
-                      src={user.image}
-                      alt={user.name || "Profile"}
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    getInitials(user?.name)
-                  )}
+                  {/* Added key prop to force re-render when image or name changes */}
+                  <div key={user?.image || user?.name} className="w-full h-full flex items-center justify-center">
+                    {user?.image ? (
+                      <img
+                        src={user.image}
+                        alt={user.name || "Profile"}
+                        className="w-full h-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      getInitials(user?.name)
+                    )}
+                  </div>
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 bg-[#0A0600] border-[#C9930A]/20 text-[#F0EAE0]">
