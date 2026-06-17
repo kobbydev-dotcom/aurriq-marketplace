@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Unauthenticated, Authenticated, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { SignInButton } from "@/components/ui/signin.tsx";
+import { useAuth } from "@/hooks/use-auth.ts";
 import { ShoppingCart, Menu, X, User, Store, Settings, LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
 import { CATEGORIES } from "@/lib/constants.ts";
@@ -25,6 +26,7 @@ export default function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
+  const { signout } = useAuth();
 
   const user = useQuery(api.users.current);
 
@@ -111,7 +113,15 @@ export default function SiteHeader() {
                 <DropdownMenuItem onClick={() => navigate("/seller/dashboard")}><Store className="mr-2 size-4" /> Vendor Dashboard</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate("/profile")}><Settings className="mr-2 size-4" /> General Settings</DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-[#C9930A]/10" />
-                <DropdownMenuItem onClick={() => window.location.reload()} className="text-red-400"><LogOut className="mr-2 size-4" /> Log out</DropdownMenuItem>
+                <DropdownMenuItem 
+                  className="text-red-400 cursor-pointer" 
+                  onClick={async () => {
+                    await signout?.();
+                    window.location.reload();
+                  }}
+                >
+                  <LogOut className="mr-2 size-4" /> Log out
+                </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           </Authenticated>
