@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { DefaultProviders } from "./components/providers/default.tsx";
 import AppLayout from "./pages/_components/AppLayout.tsx";
+import ProfilePage from "./pages/profile/page.tsx"; 
 
 import HomePage from "./pages/Index.tsx";
 import ShopPage from "./pages/shop/page.tsx";
@@ -12,7 +13,7 @@ import NotFoundPage from "./pages/NotFound.tsx";
 
 import SSOLandingPage from "./pages/admin/SSOLandingPage.tsx";
 import SellerDashboardPage from "./pages/seller/dashboard/page.tsx";
-import AuthPage from "./pages/auth/page.tsx"; // Linked your brand new auth page
+import AuthPage from "./pages/auth/page.tsx"; 
 
 import { Toaster } from "./components/ui/sonner";
 
@@ -31,6 +32,7 @@ export default function App() {
             <Route path="/orders" element={<OrdersPage />} />
             <Route path="/messages" element={<MessagesPage />} />
             <Route path="/product/:productId" element={<ProductDetailPage />} />
+            <Route path="/profile" element={<ProfilePage />} />
           </Route>
 
           {/* Registered Auth route to handle your incoming sign-ins */}
