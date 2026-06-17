@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Unauthenticated, Authenticated } from "convex/react";
+import { Unauthenticated, Authenticated, useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { ShoppingCart, Menu, X, User, Store, Settings, LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
@@ -22,13 +23,12 @@ const NAV_LINKS = [
 export default function SiteHeader() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [userName, setUserName] = useState("");
   const location = useLocation();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    setUserName(localStorage.getItem("userName") || "");
-  }, []);
+  // Using your existing 'current' query to get the user state
+  const user = useQuery(api.users.current);
+  const userName = user?.name || "";
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
