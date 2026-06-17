@@ -1,7 +1,7 @@
 export default {
   providers: [
     {
-      domain: process.env.CONVEX_SITE_URL,
+      domain: "https://aurriq.doabookpro.com", // Replace this with your actual URL
       applicationID: "convex",
     },
   ],
