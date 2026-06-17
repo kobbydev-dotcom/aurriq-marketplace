@@ -7,6 +7,4 @@ export const { auth, signIn, signOut, store } = convexAuth({
     Password,
     Google,
   ],
-  // Explicitly tell it to look for the secret in your env vars
-  secret: process.env.AUTH_SECRET, 
 });
