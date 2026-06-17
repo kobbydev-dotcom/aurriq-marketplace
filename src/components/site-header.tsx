@@ -26,9 +26,7 @@ export default function SiteHeader() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  // Using your existing 'current' query to get the user state
   const user = useQuery(api.users.current);
-  const userName = user?.name || "";
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -39,7 +37,13 @@ export default function SiteHeader() {
   useEffect(() => setMenuOpen(false), [location.pathname]);
 
   const getInitials = (name: string) => {
-    return name.split(" ").filter((n) => n.length > 0).map((part) => part[0]).join("").toUpperCase().slice(0, 3);
+    return name
+      .split(" ")
+      .filter((n) => n.length > 0)
+      .map((part) => part[0])
+      .join("")
+      .toUpperCase()
+      .slice(0, 3);
   };
 
   return (
@@ -98,7 +102,7 @@ export default function SiteHeader() {
                   className="hidden md:flex items-center justify-center rounded-full text-xs transition-all flex-shrink-0 hover:scale-105"
                   style={{ background: "#C9930A", color: "#0A0600", height: "36px", width: "36px", fontWeight: 600, cursor: "pointer" }}
                 >
-                  {userName ? getInitials(userName) : "U"}
+                  {user === undefined ? "" : user?.name ? getInitials(user.name) : "U"}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 bg-[#0A0600] border-[#C9930A]/20 text-[#F0EAE0]">

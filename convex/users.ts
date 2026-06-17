@@ -33,6 +33,9 @@ export const current = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
+    // By returning the result of the query directly, Convex's reactivity system
+    // will automatically watch this document. When you update your profile,
+    // this query will re-run and the Header will update instantly.
     return await ctx.db
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.subject))
