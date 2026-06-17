@@ -102,10 +102,26 @@ export default function SiteHeader() {
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button
-                  className="hidden md:flex items-center justify-center rounded-full text-xs transition-all flex-shrink-0 hover:scale-105"
-                  style={{ background: "#C9930A", color: "#0A0600", height: "36px", width: "36px", fontWeight: 600, cursor: "pointer" }}
+                  className="hidden md:flex items-center justify-center rounded-full text-xs transition-all flex-shrink-0 hover:scale-105 overflow-hidden border border-[#C9930A]/30"
+                  style={{ 
+                    background: "#C9930A", 
+                    color: "#0A0600", 
+                    height: "36px", 
+                    width: "36px", 
+                    fontWeight: 600, 
+                    cursor: "pointer" 
+                  }}
                 >
-                  {getInitials(user?.name)}
+                  {user?.image ? (
+                    <img
+                      src={user.image}
+                      alt={user.name || "Profile"}
+                      className="w-full h-full object-cover"
+                      referrerPolicy="no-referrer"
+                    />
+                  ) : (
+                    getInitials(user?.name)
+                  )}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 bg-[#0A0600] border-[#C9930A]/20 text-[#F0EAE0]">
