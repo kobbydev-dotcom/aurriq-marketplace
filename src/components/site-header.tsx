@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { Unauthenticated, Authenticated, useQuery } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react"; // Official hook
+import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../../convex/_generated/api";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { ShoppingCart, Menu, X, User, Store, Settings, LogOut } from "lucide-react";
@@ -26,8 +26,6 @@ export default function SiteHeader() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  
-  // Use official signout action
   const { signOut } = useAuthActions();
 
   const user = useQuery(api.users.current);
@@ -107,7 +105,7 @@ export default function SiteHeader() {
                   className="hidden md:flex items-center justify-center rounded-full text-xs transition-all flex-shrink-0 hover:scale-105"
                   style={{ background: "#C9930A", color: "#0A0600", height: "36px", width: "36px", fontWeight: 600, cursor: "pointer" }}
                 >
-                  {user === undefined ? "" : getInitials(user?.name)}
+                  {getInitials(user?.name)}
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56 bg-[#0A0600] border-[#C9930A]/20 text-[#F0EAE0]">
