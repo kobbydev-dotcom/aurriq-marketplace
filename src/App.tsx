@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { DefaultProviders } from "./components/providers/default.tsx";
 import AppLayout from "./pages/_components/AppLayout.tsx";
 import ProfilePage from "./pages/profile/page.tsx"; 
+import { ComingSoonGuard } from "./components/auth/ComingSoonGuard";
 
 import HomePage from "./pages/Index.tsx";
 import ShopPage from "./pages/shop/page.tsx";
@@ -27,11 +28,11 @@ export default function App() {
 
           {/* All inner app pages use AppLayout's navbar */}
           <Route element={<AppLayout />}>
-            <Route path="/shop" element={<ShopPage />} />
-            <Route path="/cart" element={<CartPage />} />
-            <Route path="/orders" element={<OrdersPage />} />
-            <Route path="/messages" element={<MessagesPage />} />
-            <Route path="/product/:productId" element={<ProductDetailPage />} />
+            <Route path="/shop" element={<ComingSoonGuard><ShopPage /></ComingSoonGuard>} />
+            <Route path="/cart" element={<ComingSoonGuard><CartPage /></ComingSoonGuard>} />
+            <Route path="/orders" element={<ComingSoonGuard><OrdersPage /></ComingSoonGuard>} />
+            <Route path="/messages" element={<ComingSoonGuard><MessagesPage /></ComingSoonGuard>} />
+            <Route path="/product/:productId" element={<ComingSoonGuard><ProductDetailPage /></ComingSoonGuard>} />
             <Route path="/profile" element={<ProfilePage />} />
           </Route>
 

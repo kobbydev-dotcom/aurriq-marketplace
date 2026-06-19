@@ -2,7 +2,7 @@
 export default {
   providers: [
     {
-      domain: "https://trustworthy-cobra-709.convex.site/",
+      domain: "https://determined-partridge-659.convex.site/",
       applicationID: "convex",
     },
   ],

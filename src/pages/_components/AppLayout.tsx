@@ -5,6 +5,7 @@ import { SignInButton } from "@/components/ui/signin.tsx";
 import { useAuth } from "@/hooks/use-auth.ts";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { toast } from "sonner"; // Added import
 
 const navLinks = [
   { path: "/shop", label: "Shop", icon: <ShoppingBag className="size-4" /> },
@@ -19,6 +20,21 @@ export default function AppLayout() {
   const location = useLocation();
   const { signout } = useAuth();
   const isSso = localStorage.getItem("marketplace_seller_id") !== null;
+
+  // Logic to block navigation
+  const handleNavClick = (path: string, e: React.MouseEvent) => {
+    const IS_LAUNCHED = false; // Change to true when ready!
+    const restrictedPaths = ["/shop", "/cart", "/orders", "/messages"];
+
+    if (!IS_LAUNCHED && restrictedPaths.includes(path)) {
+      e.preventDefault(); 
+      toast.error("Launching Soon", {
+        description: "The marketplace is under construction. Stay tuned!"
+      });
+      return;
+    }
+    navigate(path);
+  };
 
   const handleSignOut = async () => {
     localStorage.removeItem("marketplace_seller_id");
@@ -41,7 +57,7 @@ export default function AppLayout() {
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => (
-              <button key={link.path} onClick={() => navigate(link.path)}
+              <button key={link.path} onClick={(e) => handleNavClick(link.path, e)}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors cursor-pointer",
                   location.pathname === link.path
@@ -80,7 +96,7 @@ export default function AppLayout() {
       {/* Mobile bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 flex md:hidden border-t border-border bg-background">
         {navLinks.map((link) => (
-          <button key={link.path} onClick={() => navigate(link.path)}
+          <button key={link.path} onClick={(e) => handleNavClick(link.path, e)}
             className={cn(
               "flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] cursor-pointer transition-colors",
               location.pathname === link.path ? "text-primary" : "text-muted-foreground"
