@@ -152,18 +152,31 @@ function CheckoutDialog({
   onClose: () => void;
   total: number;
 }) {
-  const placeOrder = useMutation(api.orders.placeOrder);
+  const placeOrder = useMutation((api.orders as any).placeOrder) as any;
   const navigate = useNavigate();
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("mobile_money");
+  const [paymentNetwork, setPaymentNetwork] = useState("mtn");
+  const [paymentAccount, setPaymentAccount] = useState("");
   const [loading, setLoading] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     try {
-      const result = await placeOrder({ buyerPhone: phone || undefined, buyerNote: note || undefined });
-      toast.success(`Order placed! ${result.orderIds.length} item(s) confirmed.`);
+      const result = await placeOrder({
+        buyerPhone: phone || undefined,
+        buyerNote: note || undefined,
+        paymentMethod,
+        paymentNetwork: paymentMethod === "mobile_money" ? paymentNetwork : undefined,
+        paymentAccount: paymentMethod === "mobile_money" ? paymentAccount || phone || undefined : undefined,
+      });
+      if (result.paymentPending) {
+        toast.success("Payment initiated. Your order is awaiting MoMo confirmation.");
+      } else {
+        toast.success(`Order placed! ${result.orderIds.length} item(s) confirmed.`);
+      }
       onClose();
       navigate("/orders");
     } catch (e) {
@@ -195,6 +208,49 @@ function CheckoutDialog({
             <p className="text-xs text-muted-foreground">So sellers can reach you about your order</p>
           </div>
           <div className="space-y-1.5">
+            <Label>Payment Method</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {[
+                { value: "mobile_money", label: "Mobile Money", description: "MoMo-ready checkout for instant payment confirmation" },
+                { value: "cash_on_delivery", label: "Cash on Delivery", description: "Pay when you receive the items" },
+              ].map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => setPaymentMethod(option.value)}
+                  className={`rounded-xl border px-4 py-3 text-left transition-colors cursor-pointer ${paymentMethod === option.value ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}
+                >
+                  <p className="text-sm font-medium">{option.label}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{option.description}</p>
+                </button>
+              ))}
+            </div>
+          </div>
+          {paymentMethod === "mobile_money" && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Mobile Money Network</Label>
+                <select
+                  value={paymentNetwork}
+                  onChange={(e) => setPaymentNetwork(e.target.value)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="mtn">MTN MoMo</option>
+                  <option value="telecel">Telecel Cash</option>
+                  <option value="airteltigo">AirtelTigo Money</option>
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>MoMo Number</Label>
+                <Input
+                  placeholder="e.g. +233 24 000 0000"
+                  value={paymentAccount}
+                  onChange={(e) => setPaymentAccount(e.target.value)}
+                />
+              </div>
+            </div>
+          )}
+          <div className="space-y-1.5">
             <Label htmlFor="note">Order note (optional)</Label>
             <Textarea
               id="note"
@@ -206,7 +262,7 @@ function CheckoutDialog({
           </div>
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex gap-2 text-xs text-amber-400">
             <Shield className="size-4 shrink-0 mt-0.5" />
-            <span>Only pay through official Aurriq channels. Never send money directly to a seller outside this platform.</span>
+            <span>Only pay through official Aurriq checkout. Mobile Money details are captured here so your order can be confirmed inside the marketplace.</span>
           </div>
           <DialogFooter className="gap-2">
             <Button type="button" variant="ghost" onClick={onClose} disabled={loading}>Cancel</Button>

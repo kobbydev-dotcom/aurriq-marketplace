@@ -1,6 +1,10 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+function isAdmin(user: { role?: string; isVerified?: boolean } | null): boolean {
+  return !!(user && (user.role === "admin" || (user.role === "seller" && user.isVerified === true)));
+}
+
 export const REPORT_REASONS = [
   "Counterfeit / fake product",
   "Misleading product description",
@@ -89,9 +93,7 @@ export const listReports = query({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!admin || admin.role !== "seller" || !admin.isVerified) return [];
-    // Using isVerified + seller as a proxy for admin access
-    // In production you'd have a dedicated admin role
+    if (!isAdmin(admin)) return [];
 
     let reportsQuery;
     if (args.status) {
@@ -138,7 +140,7 @@ export const updateReportStatus = mutation({
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (!admin || admin.role !== "seller" || !admin.isVerified) {
+    if (!isAdmin(admin)) {
       throw new ConvexError({ code: "FORBIDDEN", message: "Admin access required" });
     }
 

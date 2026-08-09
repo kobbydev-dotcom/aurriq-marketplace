@@ -6,7 +6,7 @@ import { toast } from "sonner";
 import {
   Plus, Package, TrendingUp, AlertTriangle, ShoppingBag,
   MoreVertical, Pencil, Trash2, ToggleLeft, ToggleRight, Tag,
-  Clock, CheckCircle, Truck, PackageCheck, XCircle
+  Clock, CheckCircle, Truck, PackageCheck, XCircle, Store, CreditCard, Smartphone, ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
@@ -138,6 +138,7 @@ function ProductCard({
 }
 
 const ORDER_STATUSES = {
+  awaiting_payment: { label: "Awaiting Payment", icon: Clock, color: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
   pending: { label: "Pending", icon: Clock, color: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" },
   confirmed: { label: "Confirmed", icon: CheckCircle, color: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
   shipped: { label: "Shipped", icon: Truck, color: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
@@ -216,6 +217,15 @@ function SellerOrdersTab() {
                       <p className="text-xs text-muted-foreground">
                         Buyer: {order.buyerName} · Qty: {order.quantity} × {formatCurrency(order.priceAtPurchase)}
                       </p>
+                      <div className="flex flex-wrap items-center gap-2 mt-2">
+                        {order.paymentMethod && (
+                          <Badge variant="secondary" className="text-[10px]">
+                            {order.paymentMethod === "mobile_money" ? "MoMo" : order.paymentMethod}
+                            {order.paymentNetwork ? ` · ${order.paymentNetwork.toUpperCase()}` : ""}
+                          </Badge>
+                        )}
+                        {order.buyerPhone && <Badge variant="outline" className="text-[10px]">{order.buyerPhone}</Badge>}
+                      </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {formatDistanceToNow(order._creationTime, { addSuffix: true })}
                       </p>
@@ -229,7 +239,7 @@ function SellerOrdersTab() {
                     <Badge className={`text-xs flex items-center gap-1 border ${cfg.color}`}>
                       <Icon className="size-3" /> {cfg.label}
                     </Badge>
-                    {order.status !== "delivered" && order.status !== "cancelled" && (
+                    {order.status !== "awaiting_payment" && order.status !== "delivered" && order.status !== "cancelled" && (
                       <Select
                         value={order.status}
                         onValueChange={(val) => handleStatusChange(order._id, val as SellerOrderStatus)}
@@ -255,6 +265,122 @@ function SellerOrdersTab() {
           </Card>
         );
       })}
+    </div>
+  );
+}
+
+function PaymentSettingsTab({
+  currentUser,
+  onSave,
+}: {
+  currentUser: Doc<"users"> | null | undefined;
+  onSave: (payload: {
+    phone?: string;
+    paymentMethod?: string;
+    paymentNetwork?: string;
+    paymentAccount?: string;
+  }) => Promise<void>;
+}) {
+  const [phone, setPhone] = useState(currentUser?.phone ?? "");
+  const [paymentMethod, setPaymentMethod] = useState(currentUser?.paymentMethod ?? "mobile_money");
+  const [paymentNetwork, setPaymentNetwork] = useState(currentUser?.paymentNetwork ?? "mtn");
+  const [paymentAccount, setPaymentAccount] = useState(currentUser?.paymentAccount ?? "");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await onSave({
+        phone: phone.trim() || undefined,
+        paymentMethod,
+        paymentNetwork: paymentMethod === "mobile_money" ? paymentNetwork : undefined,
+        paymentAccount: paymentMethod === "mobile_money" ? paymentAccount.trim() || undefined : undefined,
+      });
+      toast.success("Payment settings saved");
+    } catch {
+      toast.error("Failed to save payment settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-5 max-w-3xl">
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base"><CreditCard className="size-4" /> Payout Profile</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Contact Phone</label>
+              <input
+                value={phone}
+                onChange={(e) => setPhone(e.target.value)}
+                placeholder="+233 24 000 0000"
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+            </div>
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <ShieldCheck className="size-4 text-primary" />
+              This phone is used for order updates and seller SMS alerts.
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base"><Smartphone className="size-4" /> MoMo Settings</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Preferred Payment Method</label>
+              <select
+                value={paymentMethod}
+                onChange={(e) => setPaymentMethod(e.target.value)}
+                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+              >
+                <option value="mobile_money">Mobile Money</option>
+                <option value="cash_on_delivery">Cash on Delivery</option>
+                <option value="bank_transfer">Bank Transfer</option>
+              </select>
+            </div>
+            {paymentMethod === "mobile_money" && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Network</label>
+                  <select
+                    value={paymentNetwork}
+                    onChange={(e) => setPaymentNetwork(e.target.value)}
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  >
+                    <option value="mtn">MTN MoMo</option>
+                    <option value="telecel">Telecel Cash</option>
+                    <option value="airteltigo">AirtelTigo Money</option>
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">MoMo Number</label>
+                  <input
+                    value={paymentAccount}
+                    onChange={(e) => setPaymentAccount(e.target.value)}
+                    placeholder="+233 24 000 0000"
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="rounded-xl border bg-primary/5 p-4 text-sm text-muted-foreground">
+        Mobile Money details let buyers check out without leaving the marketplace. Keep them updated so orders can be confirmed quickly.
+      </div>
+
+      <Button onClick={save} disabled={saving} className="gap-2">
+        <CreditCard className="size-4" /> {saving ? "Saving..." : "Save Payment Settings"}
+      </Button>
     </div>
   );
 }
@@ -312,11 +438,24 @@ export default function SellerDashboardInner() {
 
   const handleBecomeSeller = async () => {
     try {
-      await updateProfile({ role: "seller" });
+      await updateProfile({ role: "seller", isSeller: true });
       toast.success("You're now a seller on Aurriq!");
     } catch {
       toast.error("Something went wrong");
     }
+  };
+
+  const handleSavePaymentSettings = async (payload: {
+    phone?: string;
+    paymentMethod?: string;
+    paymentNetwork?: string;
+    paymentAccount?: string;
+  }) => {
+    await updateProfile({
+      ...payload,
+      role: "seller",
+      isSeller: true,
+    });
   };
 
   if (products === undefined || stats === undefined || currentUser === undefined) {
@@ -356,6 +495,7 @@ export default function SellerDashboardInner() {
             <li>SMS alerts when your stock hits your set minimum</li>
             <li>Revenue dashboard showing total earned per product</li>
             <li>Direct messaging with buyers</li>
+            <li>Payment preference setup for MoMo, COD, and bank transfer support</li>
           </ul>
         </div>
         <Button size="lg" onClick={handleBecomeSeller} className="rounded-full px-10">
@@ -398,6 +538,9 @@ export default function SellerDashboardInner() {
           </TabsTrigger>
           <TabsTrigger value="orders" className="gap-2 cursor-pointer">
             <ShoppingBag className="size-3.5" /> Orders
+          </TabsTrigger>
+          <TabsTrigger value="payments" className="gap-2 cursor-pointer">
+            <CreditCard className="size-3.5" /> Payments
           </TabsTrigger>
         </TabsList>
 
@@ -487,6 +630,21 @@ export default function SellerDashboardInner() {
         {/* ── Orders Tab ── */}
         <TabsContent value="orders">
           <SellerOrdersTab />
+        </TabsContent>
+
+        <TabsContent value="payments">
+          <div className="space-y-5">
+            <div className="flex items-center gap-3 rounded-xl border border-border bg-card p-4">
+              <div className="size-11 rounded-full bg-primary/10 flex items-center justify-center">
+                <Store className="size-5 text-primary" />
+              </div>
+              <div>
+                <p className="font-medium">Seller payment setup</p>
+                <p className="text-sm text-muted-foreground">Configure how buyers pay you and what number gets used for MoMo checkout confirmation.</p>
+              </div>
+            </div>
+            <PaymentSettingsTab currentUser={currentUser} onSave={handleSavePaymentSettings} />
+          </div>
         </TabsContent>
       </Tabs>
 

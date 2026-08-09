@@ -6,8 +6,11 @@ export const placeOrder = mutation({
   args: {
     buyerPhone: v.optional(v.string()),
     buyerNote: v.optional(v.string()),
+    paymentMethod: v.optional(v.string()),
+    paymentNetwork: v.optional(v.string()),
+    paymentAccount: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<{ orderIds: string[]; total: number }> => {
+  handler: async (ctx, args): Promise<{ orderIds: string[]; total: number; paymentReference?: string; paymentPending?: boolean }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Please sign in to place an order" });
 
@@ -28,6 +31,12 @@ export const placeOrder = mutation({
 
     const orderIds: string[] = [];
     let total = 0;
+    const isMomoCheckout = args.paymentMethod === "mobile_money";
+    const paymentReference = isMomoCheckout ? `AURRIQ-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}` : undefined;
+
+    if (isMomoCheckout && !(args.paymentAccount || args.buyerPhone)) {
+      throw new ConvexError({ code: "BAD_REQUEST", message: "Provide a mobile money number to complete checkout" });
+    }
 
     for (const item of cartItems) {
       const product = await ctx.db.get(item.productId);
@@ -54,30 +63,46 @@ export const placeOrder = mutation({
         quantity: item.quantity,
         priceAtPurchase,
         totalAmount,
-        status: "pending",
+        status: isMomoCheckout ? "awaiting_payment" : "pending",
         buyerPhone: args.buyerPhone,
         buyerNote: args.buyerNote,
+        paymentMethod: args.paymentMethod,
+        paymentNetwork: args.paymentNetwork,
+        paymentAccount: args.paymentAccount,
+        paymentReference,
+        paymentStatus: isMomoCheckout ? "initiated" : "not_required",
       });
       orderIds.push(orderId);
 
-      // Decrement stock
-      const newStock = product.stockQuantity - item.quantity;
-      await ctx.db.patch(item.productId, {
-        stockQuantity: newStock,
-        totalSold: product.totalSold + item.quantity,
-        totalRevenue: product.totalRevenue + totalAmount,
-      });
+      if (!isMomoCheckout) {
+        // Decrement stock immediately for non-gateway methods
+        const newStock = product.stockQuantity - item.quantity;
+        await ctx.db.patch(item.productId, {
+          stockQuantity: newStock,
+          totalSold: product.totalSold + item.quantity,
+          totalRevenue: product.totalRevenue + totalAmount,
+        });
 
-      // Trigger SMS alerts if needed
-      await ctx.scheduler.runAfter(0, internal.inventory.checkAndSendAlerts, {
-        productId: item.productId,
-      });
+        // Trigger SMS alerts if needed
+        await ctx.scheduler.runAfter(0, internal.inventory.checkAndSendAlerts, {
+          productId: item.productId,
+        });
+      }
     }
 
     // Clear cart
     await Promise.all(cartItems.map((item) => ctx.db.delete(item._id)));
 
-    return { orderIds, total };
+    if (isMomoCheckout && paymentReference) {
+      await ctx.scheduler.runAfter(0, (internal as any).payments.initiateMomoCharge, {
+        paymentReference,
+        amount: total,
+        phone: args.paymentAccount || args.buyerPhone,
+        network: args.paymentNetwork,
+      });
+    }
+
+    return { orderIds, total, paymentReference, paymentPending: isMomoCheckout };
   },
 });
 

@@ -15,6 +15,7 @@ import type * as http from "../http.js";
 import type * as inventory from "../inventory.js";
 import type * as messages from "../messages.js";
 import type * as orders from "../orders.js";
+import type * as payments from "../payments.js";
 import type * as products from "../products.js";
 import type * as reports from "../reports.js";
 import type * as seed from "../seed.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   inventory: typeof inventory;
   messages: typeof messages;
   orders: typeof orders;
+  payments: typeof payments;
   products: typeof products;
   reports: typeof reports;
   seed: typeof seed;

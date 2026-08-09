@@ -15,6 +15,7 @@ function formatCurrency(amount: number) {
 }
 
 const STATUS_CONFIG = {
+  awaiting_payment: { label: "Awaiting Payment", icon: Clock, color: "bg-orange-500/10 text-orange-400 border-orange-500/20" },
   pending: { label: "Pending", icon: Clock, color: "bg-yellow-500/10 text-yellow-400 border-yellow-500/20" },
   confirmed: { label: "Confirmed", icon: CheckCircle, color: "bg-blue-500/10 text-blue-400 border-blue-500/20" },
   shipped: { label: "Shipped", icon: Truck, color: "bg-purple-500/10 text-purple-400 border-purple-500/20" },
@@ -39,7 +40,7 @@ function OrderCard({
     sellerName: string;
   };
 }) {
-  const cfg = STATUS_CONFIG[order.status];
+  const cfg = STATUS_CONFIG[order.status] ?? STATUS_CONFIG.pending;
   const Icon = cfg.icon;
 
   return (

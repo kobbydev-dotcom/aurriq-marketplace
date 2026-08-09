@@ -12,7 +12,7 @@ async function getAdminUser(ctx: QueryCtx | MutationCtx) {
 }
 
 function isAdmin(user: { role?: string; isVerified?: boolean } | null): boolean {
-  return !!(user && user.role === "seller" && user.isVerified === true);
+  return !!(user && (user.role === "admin" || (user.role === "seller" && user.isVerified === true)));
 }
 
 export const verifySellerById = mutation({
@@ -38,7 +38,7 @@ export const listSellers = query({
     if (!isAdmin(admin)) return [];
 
     const allUsers = await ctx.db.query("users").collect();
-    const sellers = allUsers.filter((u) => u.role === "seller");
+    const sellers = allUsers.filter((u) => u.role === "seller" || u.isSeller === true);
 
     return await Promise.all(
       sellers.map(async (seller) => {

@@ -17,6 +17,9 @@ export default defineSchema({
     phone: v.optional(v.string()),
     avatar: v.optional(v.string()),
     role: v.optional(v.string()),
+    paymentMethod: v.optional(v.string()),
+    paymentNetwork: v.optional(v.string()),
+    paymentAccount: v.optional(v.string()),
   })
   .index("by_token", ["tokenIdentifier"])
   .index("email", ["email"]),
@@ -89,6 +92,12 @@ export default defineSchema({
     priceAtPurchase: v.optional(v.number()),
     buyerPhone: v.optional(v.string()),
     buyerNote: v.optional(v.string()),
+    paymentMethod: v.optional(v.string()),
+    paymentNetwork: v.optional(v.string()),
+    paymentAccount: v.optional(v.string()),
+    paymentReference: v.optional(v.string()),
+    paymentStatus: v.optional(v.string()),
+    paymentProviderTxnId: v.optional(v.string()),
     items: v.optional(
       v.array(
         v.object({
@@ -100,5 +109,6 @@ export default defineSchema({
     ),
   })
     .index("by_buyer", ["buyerId"])
-    .index("by_seller", ["sellerId"]),
+    .index("by_seller", ["sellerId"])
+    .index("by_payment_reference", ["paymentReference"]),
 });

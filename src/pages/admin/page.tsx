@@ -282,7 +282,9 @@ function AdminPageInner() {
     );
   }
 
-  if (!currentUser || currentUser.role !== "seller" || !currentUser.isVerified) {
+  const canManageMarketplace = !!currentUser && (currentUser.role === "admin" || (currentUser.role === "seller" && currentUser.isVerified));
+
+  if (!canManageMarketplace) {
     return (
       <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 text-center px-4">
         <div className="size-16 rounded-full bg-destructive/10 flex items-center justify-center">
