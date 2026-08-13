@@ -12,6 +12,7 @@ const navLinks = [
   { path: "/orders", label: "Orders", icon: <ClipboardList className="size-4" /> },
   { path: "/messages", label: "Messages", icon: <MessageSquare className="size-4" /> },
   { path: "/seller/dashboard", label: "My Shop", icon: <LayoutDashboard className="size-4" /> },
+  { path: "/buyer/dashboard", label: "Buyer Dashboard", icon: <ShoppingCart className="size-4" /> }, // New buyer dashboard link
 ];
 
 export default function AppLayout() {
