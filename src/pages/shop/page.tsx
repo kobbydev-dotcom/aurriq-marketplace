@@ -11,6 +11,7 @@ import { useDebounce } from "@/hooks/use-debounce.ts";
 import { cn } from "@/lib/utils.ts";
 import { VerifiedBadge } from "@/components/trust/VerifiedBadge.tsx";
 import { Id } from "../../../convex/_generated/dataModel"; // Imported to type-cast the sellerId safely
+import { formatCurrency } from "@/lib/utils.ts";
 
 const CATEGORIES = [
   { value: "", label: "All" },
@@ -21,10 +22,6 @@ const CATEGORIES = [
   { value: "fragrance", label: "Fragrance" },
   { value: "tools", label: "Tools" },
 ];
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amount);
-}
 
 export default function ShopPage() {
   const [searchParams, setSearchParams] = useSearchParams();

@@ -119,6 +119,7 @@ export const createProduct = mutation({
     variants: v.optional(v.any()),
     lowStockThreshold: v.number(),
     images: v.array(v.string()),
+    videos: v.optional(v.array(v.string())),
     tags: v.array(v.string()),
   },
   handler: async (ctx, args) => {
@@ -158,6 +159,7 @@ export const createProduct = mutation({
       // Image galleries mapping configuration
       imageUrl: mainImageUrl, 
       images: args.images,
+      videos: args.videos ?? [],
       tags: args.tags,
       variants: args.variants,
 
@@ -232,6 +234,7 @@ export const updateProduct = mutation({
     variants: v.optional(v.any()),
     lowStockThreshold: v.optional(v.number()),
     images: v.optional(v.array(v.string())),
+    videos: v.optional(v.array(v.string())),
     tags: v.optional(v.array(v.string())),
     isActive: v.optional(v.boolean()),
   },
@@ -268,6 +271,7 @@ export const updateProduct = mutation({
       stockQuantity: nextStock,
       lowStockThreshold: nextThreshold,
       images: nextImages,
+      videos: args.videos ?? product.videos ?? [],
       imageUrl: nextImages[0] ?? product.imageUrl ?? "",
       tags: args.tags ?? product.tags,
       variants: nextVariants,

@@ -43,10 +43,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select.tsx";
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amount);
-}
+import { formatCurrency } from "@/lib/utils.ts";
 
 function StockBadge({ stock, threshold }: { stock: number; threshold: number }) {
   if (stock === 0) return <Badge variant="destructive" className="text-[10px]">Out of Stock</Badge>;

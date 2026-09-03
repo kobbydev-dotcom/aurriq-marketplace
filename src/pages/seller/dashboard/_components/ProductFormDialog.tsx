@@ -6,7 +6,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api.js";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
-import { X, Plus, ImageIcon, AlertTriangle, Info } from "lucide-react";
+import { X, Plus, ImageIcon, AlertTriangle, Info, Video } from "lucide-react";
 import { TrustSafetyBanner } from "@/components/trust/TrustSafetyBanner.tsx";
 import {
   Dialog,
@@ -50,6 +50,11 @@ const schema = z
     imageUrl1: z.string().url("Enter a valid image URL").optional().or(z.literal("")),
     imageUrl2: z.string().url("Enter a valid image URL").optional().or(z.literal("")),
     imageUrl3: z.string().url("Enter a valid image URL").optional().or(z.literal("")),
+    imageUrl4: z.string().url("Enter a valid image URL").optional().or(z.literal("")),
+    imageUrl5: z.string().url("Enter a valid image URL").optional().or(z.literal("")),
+    imageUrl6: z.string().url("Enter a valid image URL").optional().or(z.literal("")),
+    videoUrl1: z.string().url("Enter a valid video URL").optional().or(z.literal("")),
+    videoUrl2: z.string().url("Enter a valid video URL").optional().or(z.literal("")),
     tags: z.string().optional(),
   })
   .refine(
@@ -96,6 +101,11 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           imageUrl1: editProduct.images[0] ?? "",
           imageUrl2: editProduct.images[1] ?? "",
           imageUrl3: editProduct.images[2] ?? "",
+          imageUrl4: editProduct.images[3] ?? "",
+          imageUrl5: editProduct.images[4] ?? "",
+          imageUrl6: editProduct.images[5] ?? "",
+          videoUrl1: editProduct.videos?.[0] ?? "",
+          videoUrl2: editProduct.videos?.[1] ?? "",
           tags: editProduct.tags?.join(", ") ?? "",
         }
       : {
@@ -105,6 +115,8 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
   });
 
   const category = watch("category");
+  const [imageCount, setImageCount] = useState(editProduct ? Math.max(3, Math.min(6, editProduct.images.length)) : 3);
+  const [videoCount, setVideoCount] = useState(editProduct ? Math.min(2, editProduct.videos?.length ?? 0) : 0);
 
   const onSubmit = async (data: FormValues) => {
     setSubmitting(true);
@@ -131,6 +143,7 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           variants: [{ color: "Default", stock: Number(data.stockQuantity || 0) }],
           lowStockThreshold: data.lowStockThreshold,
           images,
+          videos: [data.videoUrl1, data.videoUrl2].filter((u): u is string => !!u && u.length > 0),
           tags,
         });
         toast.success("Product updated successfully");
@@ -145,11 +158,14 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           variants: [{ color: "Default", stock: Number(data.stockQuantity || 0) }],
           lowStockThreshold: data.lowStockThreshold,
           images,
+          videos: [data.videoUrl1, data.videoUrl2].filter((u): u is string => !!u && u.length > 0),
           tags,
         });
         toast.success("Product listed successfully!");
       }
       reset();
+      setImageCount(3);
+      setVideoCount(0);
       onClose();
     } catch (err) {
       if (err instanceof ConvexError) {
@@ -231,13 +247,13 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           {/* Pricing */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <Label>Original Price (₦) *</Label>
+              <Label>Original Price (GHS) *</Label>
               <Input type="number" placeholder="0.00" step="0.01" {...register("originalPrice")} />
               {errors.originalPrice && <p className="text-destructive text-xs">{errors.originalPrice.message}</p>}
             </div>
             <div className="space-y-1.5">
               <div className="flex items-center gap-1.5">
-                <Label>Promo / Sale Price (₦)</Label>
+                <Label>Promo / Sale Price (GHS)</Label>
                 <span className="text-[10px] text-muted-foreground">(optional)</span>
               </div>
               <Input type="number" placeholder="Leave blank if no promo" step="0.01" {...register("promoPrice")} />
@@ -265,23 +281,35 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
             </div>
           </div>
 
-          {/* Images */}
+          {/* Images and videos */}
           <div className="space-y-2">
-            <Label>Product Images (URLs)</Label>
+            <Label>Product media</Label>
             <p className="text-[11px] text-muted-foreground">
-              Paste direct image links (from your photo storage, Google Drive, etc). Add up to 3 photos.
+              Add direct links from Cloudinary, Cloudflare Stream, or another CDN. Your first image is the cover.
             </p>
             <div className="space-y-2">
-              {(["imageUrl1", "imageUrl2", "imageUrl3"] as const).map((field, i) => (
+              {(["imageUrl1", "imageUrl2", "imageUrl3", "imageUrl4", "imageUrl5", "imageUrl6"] as const).slice(0, imageCount).map((field, i) => (
                 <div key={field} className="flex items-center gap-2">
                   <ImageIcon className="size-4 text-muted-foreground shrink-0" />
                   <Input placeholder={`Image ${i + 1} URL${i === 0 ? " (main photo)" : " (optional)"}`} {...register(field)} />
                 </div>
               ))}
             </div>
-            {(errors.imageUrl1 ?? errors.imageUrl2 ?? errors.imageUrl3) && (
+            {imageCount < 6 && <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setImageCount((count) => Math.min(6, count + 1))}><Plus className="size-3.5" /> Add another photo</Button>}
+            {(errors.imageUrl1 ?? errors.imageUrl2 ?? errors.imageUrl3 ?? errors.imageUrl4 ?? errors.imageUrl5 ?? errors.imageUrl6) && (
               <p className="text-destructive text-xs">Please enter valid image URLs</p>
             )}
+            <div className="space-y-2 pt-2">
+              <p className="text-xs font-medium flex items-center gap-2"><Video className="size-3.5 text-primary" /> Product videos <span className="font-normal text-muted-foreground">(optional)</span></p>
+              {(["videoUrl1", "videoUrl2"] as const).slice(0, videoCount).map((field, i) => (
+                <div key={field} className="flex items-center gap-2">
+                  <Video className="size-4 text-muted-foreground shrink-0" />
+                  <Input placeholder={`Video ${i + 1} URL`} {...register(field)} />
+                </div>
+              ))}
+              {videoCount < 2 && <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setVideoCount((count) => Math.min(2, count + 1))}><Plus className="size-3.5" /> Add a video</Button>}
+              {(errors.videoUrl1 ?? errors.videoUrl2) && <p className="text-destructive text-xs">Please enter valid video URLs</p>}
+            </div>
           </div>
 
           {/* Tags */}

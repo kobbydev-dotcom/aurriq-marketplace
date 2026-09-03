@@ -2,7 +2,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api.js";
 import { useState } from "react";
-import { ShoppingCart, MessageCircle, Phone, ArrowLeft, Package, ChevronLeft, ChevronRight, Loader2, Plus, Minus, Flag } from "lucide-react";
+import { ShoppingCart, MessageCircle, Phone, ArrowLeft, Package, ChevronLeft, ChevronRight, Loader2, Plus, Minus, Flag, Video } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -22,10 +22,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amount);
-}
+import { formatCurrency } from "@/lib/utils.ts";
 
 export default function ProductDetailPage() {
   const { productId } = useParams<{ productId: string }>();
@@ -85,6 +82,7 @@ export default function ProductDetailPage() {
     ? Math.round(((product.originalPrice - product.promoPrice) / product.originalPrice) * 100)
     : null;
   const images = product.images.length > 0 ? product.images : [];
+  const videos = (product as any).videos as string[] | undefined;
   const isOutOfStock = product.stockQuantity === 0;
 
   return (
@@ -143,6 +141,16 @@ export default function ProductDetailPage() {
                   <img src={img} alt={`${product.name} ${i + 1}`} className="w-full h-full object-cover" />
                 </button>
               ))}
+            </div>
+          )}
+          {videos && videos.length > 0 && (
+            <div className="space-y-2 pt-2">
+              <p className="flex items-center gap-2 text-xs font-medium text-muted-foreground"><Video className="size-3.5 text-primary" /> Product videos</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {videos.map((videoUrl, index) => (
+                  <video key={videoUrl || index} src={videoUrl} controls preload="metadata" className="aspect-video w-full rounded-lg border border-border bg-black" aria-label={`${product.name} video ${index + 1}`} />
+                ))}
+              </div>
             </div>
           )}
         </div>

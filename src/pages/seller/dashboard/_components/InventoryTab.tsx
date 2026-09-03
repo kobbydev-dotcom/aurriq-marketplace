@@ -21,14 +21,7 @@ import {
 } from "@/components/ui/dialog.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import type { Id } from "../../../../../convex/_generated/dataModel.d.ts";
-
-function formatCurrency(n: number) {
-  return new Intl.NumberFormat("en-NG", {
-    style: "currency",
-    currency: "NGN",
-    maximumFractionDigits: 0,
-  }).format(n);
-}
+import { formatCurrency } from "@/lib/utils.ts";
 
 type InventoryItem = {
   _id: Id<"products">;

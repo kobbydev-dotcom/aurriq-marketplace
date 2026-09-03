@@ -9,10 +9,7 @@ import { SignInButton } from "@/components/ui/signin.tsx";
 import { Button } from "@/components/ui/button.tsx";
 import { formatDistanceToNow } from "date-fns";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty.tsx";
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amount);
-}
+import { formatCurrency } from "@/lib/utils.ts";
 
 const STATUS_CONFIG = {
   awaiting_payment: { label: "Awaiting Payment", icon: Clock, color: "bg-orange-500/10 text-orange-400 border-orange-500/20" },

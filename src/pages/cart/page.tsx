@@ -21,10 +21,7 @@ import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
 import { Textarea } from "@/components/ui/textarea.tsx";
 import type { Id } from "../../../convex/_generated/dataModel.d.ts";
-
-function formatCurrency(amount: number) {
-  return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", maximumFractionDigits: 0 }).format(amount);
-}
+import { formatCurrency } from "@/lib/utils.ts";
 
 type CartItem = {
   _id: Id<"cartItems">;

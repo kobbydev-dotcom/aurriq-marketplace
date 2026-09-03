@@ -33,6 +33,7 @@ export default defineSchema({
     promoPrice: v.optional(v.number()),
     imageUrl: v.optional(v.string()),
     images: v.optional(v.array(v.string())),
+    videos: v.optional(v.array(v.string())),
     category: v.string(),
     sellerId: v.id("users"),
     inventory: v.optional(v.number()),
