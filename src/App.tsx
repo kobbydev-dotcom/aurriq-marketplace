@@ -14,6 +14,7 @@ import NotFoundPage from "./pages/NotFound.tsx";
 import SSOLandingPage from "./pages/admin/SSOLandingPage.tsx";
 import SellerDashboardPage from "./pages/seller/dashboard/page.tsx";
 import AuthPage from "./pages/auth/page.tsx"; 
+import BuyerDashboardPage from "./pages/buyer/dashboard/page.tsx";
 
 import { Toaster } from "./components/ui/sonner";
 
@@ -33,6 +34,7 @@ export default function App() {
             <Route path="/messages" element={<MessagesPage />} />
             <Route path="/product/:productId" element={<ProductDetailPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/buyer/dashboard" element={<BuyerDashboardPage />} />
           </Route>
 
           {/* Registered Auth route to handle your incoming sign-ins */}
