@@ -22,5 +22,9 @@ export default defineConfig({
         }
       }
     }
-  }
+  },
+
+  preview: {
+    allowedHosts: ["aurriq-marketplace-live-a04ea8311137.herokuapp.com"],
+  },
 });
