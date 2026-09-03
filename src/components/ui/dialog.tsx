@@ -41,6 +41,7 @@ function DialogOverlay({
   return (
     <DialogPrimitive.Overlay
       data-slot="dialog-overlay"
+      style={{ backgroundColor: "rgba(0, 0, 0, 0.8)" }}
       className={cn(
         "data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50 bg-black/50",
         className,
@@ -68,6 +69,7 @@ function DialogContent({
           "[background-color:#0c0904]",
           className,
         )}
+        style={{ backgroundColor: "#0c0904", opacity: 1, isolation: "isolate" }}
         {...props}
       >
         {children}

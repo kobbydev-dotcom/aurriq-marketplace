@@ -96,7 +96,7 @@ export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange:
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[70] bg-black/80 backdrop-blur-none transition-opacity" />
-        <Dialog.Content className="fixed top-1/2 left-1/2 z-[80] w-full max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-[#c9930a]/25 bg-[#0c0904] p-6 text-[#f0eae0] shadow-[0_24px_90px_rgba(0,0,0,0.7)] outline-none transition-all max-h-[90vh] [background-color:#0c0904]">
+        <Dialog.Content style={{ backgroundColor: "#0c0904", opacity: 1, isolation: "isolate" }} className="fixed top-1/2 left-1/2 z-[80] w-full max-w-md -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-2xl border border-[#c9930a]/25 bg-[#0c0904] p-6 text-[#f0eae0] shadow-[0_24px_90px_rgba(0,0,0,0.7)] outline-none transition-all max-h-[90vh] [background-color:#0c0904]">
           
           <div className="text-center relative mb-6">
             <div className="size-10 rounded-full bg-primary/10 flex items-center justify-center mx-auto mb-2">

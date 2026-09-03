@@ -15,7 +15,7 @@ export const storeUser = mutation({
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
 
-    const name = identity.name ?? user?.name ?? "Anonymous Buyer";
+    const name = user?.name ?? identity.name ?? "Anonymous Buyer";
     const imageUrl = identity.picture || (identity as any).pictureUrl || undefined;
 
     if (user !== null) {
