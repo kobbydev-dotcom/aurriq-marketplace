@@ -1,11 +1,12 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api.js";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import {
   Plus, Package, TrendingUp, AlertTriangle, ShoppingBag,
-  MoreVertical, Pencil, Trash2, ToggleLeft, ToggleRight, Tag, MessageSquare,
+  MoreVertical, Pencil, Trash2, ToggleLeft, ToggleRight, Tag, MessageSquare, ArrowLeft,
   Clock, CheckCircle, Truck, PackageCheck, XCircle, Store, CreditCard, Smartphone, ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
@@ -511,8 +512,11 @@ export default function SellerDashboardInner() {
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
       {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+      <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
+          <Link to="/" className="mb-3 inline-flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-primary">
+            <ArrowLeft className="size-3.5" /> Back to Aurriq home
+          </Link>
           <h1 className="text-3xl font-light" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
             Seller Dashboard
           </h1>
