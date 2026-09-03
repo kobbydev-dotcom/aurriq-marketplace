@@ -5,7 +5,7 @@ import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import {
   Plus, Package, TrendingUp, AlertTriangle, ShoppingBag,
-  MoreVertical, Pencil, Trash2, ToggleLeft, ToggleRight, Tag,
+  MoreVertical, Pencil, Trash2, ToggleLeft, ToggleRight, Tag, MessageSquare,
   Clock, CheckCircle, Truck, PackageCheck, XCircle, Store, CreditCard, Smartphone, ShieldCheck
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
@@ -34,7 +34,8 @@ import {
 } from "@/components/ui/alert-dialog.tsx";
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyContent } from "@/components/ui/empty.tsx";
 import ProductFormDialog from "@/pages/seller/dashboard/_components/ProductFormDialog.tsx";
-import type { Doc } from "../../../../../convex/_generated/dataModel.d.ts";
+import type { Doc, Id } from "../../../../../convex/_generated/dataModel.d.ts";
+import SellerMessagesTab from "@/pages/seller/dashboard/_components/SellerMessagesTab.tsx";
 import {
   Select,
   SelectContent,
@@ -147,7 +148,7 @@ const ORDER_STATUSES = {
 } as const;
 type SellerOrderStatus = keyof typeof ORDER_STATUSES;
 
-function SellerOrdersTab() {
+function SellerOrdersTab({ onContactBuyer }: { onContactBuyer: (buyerId: Id<"users">) => void }) {
   // Safe layout downcasting to bypass missing file endpoint flags on the schema surface
   const getSellerOrders = ((api.orders as any).getSellerOrders || (api.products as any).listAll) as any;
   const updateOrderStatus = ((api.orders as any).updateOrderStatus || (api.products as any).listAll) as any;
@@ -258,6 +259,9 @@ function SellerOrdersTab() {
                         </SelectContent>
                       </Select>
                     )}
+                    <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => onContactBuyer(order.buyerId)}>
+                      <MessageSquare className="size-3" /> Contact buyer
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -389,7 +393,7 @@ export default function SellerDashboardInner() {
   // Safe query downcasting layers to bypass missing file generation configurations
   const getMyProducts = ((api.products as any).getMyProducts || (api.products as any).listAll) as any;
   const getSellerStats = ((api.products as any).getSellerStats || (api.products as any).listAll) as any;
-  const getCurrentUser = ((api.users as any).getCurrentUser || (api.products as any).listAll) as any;
+  const getCurrentUser = api.users.current;
   const updateProductEndpoint = ((api.products as any).updateProduct || (api.products as any).listAll) as any;
   const deleteProductEndpoint = ((api.products as any).deleteProduct || (api.products as any).listAll) as any;
   const updateProfileEndpoint = ((api.users as any).updateProfile || (api.products as any).listAll) as any;
@@ -405,6 +409,8 @@ export default function SellerDashboardInner() {
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Doc<"products"> | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("products");
+  const [selectedBuyerId, setSelectedBuyerId] = useState<Id<"users"> | null>(null);
 
   const handleEdit = (p: Doc<"products">) => {
     setEditTarget(p);
@@ -523,7 +529,7 @@ export default function SellerDashboardInner() {
       </div>
 
       {/* Tabs: Products / Inventory & Revenue */}
-      <Tabs defaultValue="products">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-6">
           <TabsTrigger value="products" className="gap-2 cursor-pointer">
             <Package className="size-3.5" /> Products
@@ -538,6 +544,9 @@ export default function SellerDashboardInner() {
           </TabsTrigger>
           <TabsTrigger value="orders" className="gap-2 cursor-pointer">
             <ShoppingBag className="size-3.5" /> Orders
+          </TabsTrigger>
+          <TabsTrigger value="messages" className="gap-2 cursor-pointer">
+            <MessageSquare className="size-3.5" /> Messages
           </TabsTrigger>
           <TabsTrigger value="payments" className="gap-2 cursor-pointer">
             <CreditCard className="size-3.5" /> Payments
@@ -629,7 +638,11 @@ export default function SellerDashboardInner() {
 
         {/* ── Orders Tab ── */}
         <TabsContent value="orders">
-          <SellerOrdersTab />
+          <SellerOrdersTab onContactBuyer={(buyerId) => { setSelectedBuyerId(buyerId); setActiveTab("messages"); }} />
+        </TabsContent>
+
+        <TabsContent value="messages">
+          <SellerMessagesTab initialConversation={selectedBuyerId} />
         </TabsContent>
 
         <TabsContent value="payments">
