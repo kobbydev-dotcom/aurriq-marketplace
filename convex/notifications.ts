@@ -2,6 +2,22 @@ import { mutation, query } from "./_generated/server";
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
 
+async function currentMarketplaceUser(ctx: any, identity: any) {
+  const authSubject = String(identity.subject ?? "").split("|")[0];
+  if (authSubject) {
+    const stableUser = await ctx.db
+      .query("users")
+      .withIndex("by_auth_subject", (q: any) => q.eq("authSubject", authSubject))
+      .unique();
+    if (stableUser) return stableUser;
+  }
+
+  return await ctx.db
+    .query("users")
+    .withIndex("by_token", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+    .unique();
+}
+
 // Create an in-app notification for a user.
 export const createNotification = internalMutation({
   args: {
@@ -45,10 +61,7 @@ export const getMyNotifications = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return [];
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
+    const user = await currentMarketplaceUser(ctx, identity);
     if (!user) return [];
     return await ctx.db
       .query("notifications")
@@ -64,10 +77,7 @@ export const getUnreadCount = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return 0;
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
+    const user = await currentMarketplaceUser(ctx, identity);
     if (!user) return 0;
     const all = await ctx.db
       .query("notifications")
@@ -93,10 +103,7 @@ export const markAllRead = mutation({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new Error("Not authenticated");
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
+    const user = await currentMarketplaceUser(ctx, identity);
     if (!user) return;
     const unread = await ctx.db
       .query("notifications")
