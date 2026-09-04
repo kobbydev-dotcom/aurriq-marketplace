@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api.js";
 import { ConvexError } from "convex/values";
@@ -543,6 +543,7 @@ export default function SellerDashboardInner() {
   const updateProduct = useMutation(updateProductEndpoint) as any;
   const deleteProduct = useMutation(deleteProductEndpoint) as any;
   const updateProfile = useMutation(updateProfileEndpoint) as any;
+  const verifyMarketplaceSubscription = useMutation((api.payments as any).verifyMarketplaceSubscription);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Doc<"products"> | null>(null);
@@ -550,6 +551,24 @@ export default function SellerDashboardInner() {
   const [activeTab, setActiveTab] = useState("products");
   const [selectedBuyerId, setSelectedBuyerId] = useState<Id<"users"> | null>(null);
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  useEffect(() => {
+    const reference = searchParams.get("reference") || localStorage.getItem("aurriq_pending_vendor_payment");
+    if (!reference || currentUser === undefined) return;
+
+    verifyMarketplaceSubscription({ paymentReference: reference })
+      .then(() => {
+        localStorage.removeItem("aurriq_pending_vendor_payment");
+        toast.success("Payment received. Verifying your marketplace access...");
+      })
+      .catch((error) => toast.error(error instanceof Error ? error.message : "Unable to verify payment"))
+      .finally(() => {
+        searchParams.delete("subscription");
+        searchParams.delete("reference");
+        setSearchParams(searchParams, { replace: true });
+      });
+  }, [currentUser, searchParams, setSearchParams, verifyMarketplaceSubscription]);
 
   const handleEdit = (p: Doc<"products">) => {
     setEditTarget(p);
@@ -645,6 +664,7 @@ export default function SellerDashboardInner() {
           open={subscriptionOpen}
           onOpenChange={setSubscriptionOpen}
           isDoaBookProPartner={Boolean((currentUser as any)?.doabookproSlug)}
+          pendingPaymentReference={(currentUser as any)?.marketplaceSubscriptionStatus === "payment_pending" ? (currentUser as any)?.marketplacePaymentReference : undefined}
         />
       </div>
     );

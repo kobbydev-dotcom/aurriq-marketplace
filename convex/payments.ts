@@ -68,7 +68,7 @@ export const startMarketplaceSubscription = action({
         email: user.email ?? "vendor@aurriq.com",
         currency: "GHS",
         reference,
-        callback_url: `${process.env.APP_URL ?? "https://aurriq-marketplace-live-a04ea8311137.herokuapp.com"}/seller/dashboard?subscription=success`,
+        callback_url: `${process.env.APP_URL ?? "https://aurriq-marketplace-live-a04ea8311137.herokuapp.com"}/seller/dashboard?subscription=success&reference=${encodeURIComponent(reference)}`,
         metadata: {
           type: "aurriq_marketplace_vendor_subscription",
           source,
@@ -392,5 +392,47 @@ export const applyPaymentWebhook = internalMutation({
         orderId: order._id,
       });
     }
+  },
+});
+
+// Public return-path verification. Webhooks remain the primary settlement path;
+// this closes the gap when Paystack's webhook is delayed or unavailable.
+export const verifyMarketplaceSubscription = mutation({
+  args: { paymentReference: v.string() },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Please sign in again to verify your payment");
+    const user: any = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+    if (!user || user.marketplacePaymentReference !== args.paymentReference) {
+      throw new Error("This payment does not belong to the signed-in account");
+    }
+
+    await ctx.scheduler.runAfter(0, internal.payments.verifyMarketplaceTransaction, {
+      userId: user._id,
+      paymentReference: args.paymentReference,
+    });
+    return { status: "verifying" };
+  },
+});
+
+export const verifyMarketplaceTransaction = internalAction({
+  args: { userId: v.id("users"), paymentReference: v.string() },
+  handler: async (ctx, args) => {
+    const secret = process.env.PAYSTACK_SECRET_KEY;
+    if (!secret) return;
+    const response = await fetch(
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(args.paymentReference)}`,
+      { headers: { Authorization: `Bearer ${secret}` } }
+    );
+    const payload: any = await response.json().catch(() => ({}));
+    const status = String(payload?.data?.status ?? "").toLowerCase();
+    await ctx.runMutation(internal.payments.applyMarketplaceSubscription, {
+      paymentReference: args.paymentReference,
+      status: status === "success" ? "success" : "failed",
+      transactionId: payload?.data?.id ? String(payload.data.id) : undefined,
+    });
   },
 });

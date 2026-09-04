@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useAction } from "convex/react";
+import { useAction, useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api.js";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog.tsx";
 import { Button } from "@/components/ui/button.tsx";
@@ -27,12 +27,15 @@ export default function VendorSubscriptionDialog({
   open,
   onOpenChange,
   isDoaBookProPartner,
+  pendingPaymentReference,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isDoaBookProPartner: boolean;
+  pendingPaymentReference?: string;
 }) {
   const startSubscription = useAction((api.payments as any).startMarketplaceSubscription);
+  const verifySubscription = useMutation((api.payments as any).verifyMarketplaceSubscription);
   const plans = isDoaBookProPartner ? PARTNER_PLANS : DIRECT_PLANS;
   const [selected, setSelected] = useState<PlanKey>("annual");
   const [loading, setLoading] = useState(false);
@@ -40,10 +43,17 @@ export default function VendorSubscriptionDialog({
   const beginPayment = async () => {
     setLoading(true);
     try {
+      if (pendingPaymentReference) {
+        await verifySubscription({ paymentReference: pendingPaymentReference });
+        toast.success("We’re checking your existing payment. Refresh shortly.");
+        onOpenChange(false);
+        return;
+      }
       const result = await startSubscription({
         planKey: selected,
         source: isDoaBookProPartner ? "doabookpro" : "direct",
       });
+      localStorage.setItem("aurriq_pending_vendor_payment", result.reference);
       window.location.assign(result.authorizationUrl);
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Unable to start marketplace payment");
@@ -67,6 +77,12 @@ export default function VendorSubscriptionDialog({
           <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm flex gap-2">
             <Sparkles className="size-4 text-primary shrink-0 mt-0.5" />
             <span>You’re linked to DOABookPro, so partner pricing is applied automatically. Your booking subscription remains separate.</span>
+          </div>
+        )}
+
+        {pendingPaymentReference && (
+          <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm">
+            A marketplace payment is already pending for this account. We’ll verify it instead of creating another charge.
           </div>
         )}
 
@@ -99,7 +115,7 @@ export default function VendorSubscriptionDialog({
           <Button variant="ghost" onClick={() => onOpenChange(false)} disabled={loading}>Not now</Button>
           <Button onClick={beginPayment} disabled={loading} className="gap-2">
             {loading && <Loader2 className="size-4 animate-spin" />}
-            Continue to secure payment
+            {pendingPaymentReference ? "Verify existing payment" : "Continue to secure payment"}
           </Button>
         </div>
       </DialogContent>
