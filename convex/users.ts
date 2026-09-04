@@ -14,6 +14,76 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
 
 // Public: sellers/service businesses who opted in to share their shop location,
 // sorted by distance from the given coordinates.
+// Public: a seller's storefront by Convex user id or DOABookPro slug — used by
+// the DOABookPro client booking page to embed the owner's shop.
+export const getStorefront = query({
+  args: {
+    sellerId: v.optional(v.id("users")),
+    slug: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    let seller: any = null;
+    if (args.sellerId) {
+      seller = await ctx.db.get(args.sellerId);
+    } else if (args.slug) {
+      const all = await ctx.db.query("users").collect();
+      seller = all.find((u: any) => u.doabookproSlug === args.slug) ?? null;
+    }
+    if (!seller) return null;
+
+    const products = await ctx.db
+      .query("products")
+      .withIndex("by_seller", (q) => q.eq("sellerId", seller._id))
+      .collect();
+    const active = products.filter((p: any) => p.isActive);
+
+    // Resolve cover images to displayable URLs.
+    const resolve = async (m: string | undefined) => {
+      if (!m) return "";
+      if (m.startsWith("http")) return m;
+      try {
+        return (await ctx.storage.getUrl(m as any)) ?? m;
+      } catch {
+        return m;
+      }
+    };
+
+    const productCards = await Promise.all(
+      active.slice(0, 12).map(async (p: any) => ({
+        _id: p._id,
+        name: p.name,
+        brand: p.brand,
+        price: p.promoPrice ?? p.originalPrice,
+        originalPrice: p.originalPrice,
+        image: await resolve(p.images?.[0]),
+        category: p.category,
+        ratingAvg: p.ratingAvg,
+        ratingCount: p.ratingCount,
+      }))
+    );
+
+    const followers = await ctx.db
+      .query("follows")
+      .withIndex("by_followee", (q) => q.eq("followeeId", seller._id))
+      .collect();
+
+    return {
+      seller: {
+        _id: seller._id,
+        name: seller.name,
+        image: seller.image ?? seller.avatar,
+        businessType: seller.businessType,
+        isVerified: seller.isVerified,
+        locationLabel: seller.locationShared ? seller.locationLabel : undefined,
+        doabookproSlug: seller.doabookproSlug,
+      },
+      productCount: active.length,
+      followerCount: followers.length,
+      products: productCards,
+    };
+  },
+});
+
 export const getNearbyShops = query({
   args: {
     latitude: v.number(),
@@ -115,6 +185,7 @@ export const updateProfile = mutation({
     latitude: v.optional(v.number()),
     longitude: v.optional(v.number()),
     locationShared: v.optional(v.boolean()),
+    doabookproSlug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -167,6 +238,7 @@ export const updateProfile = mutation({
     if (typeof args.latitude === "number") patch.latitude = args.latitude;
     if (typeof args.longitude === "number") patch.longitude = args.longitude;
     if (typeof args.locationShared === "boolean") patch.locationShared = args.locationShared;
+    if (typeof args.doabookproSlug === "string") patch.doabookproSlug = args.doabookproSlug.trim();
     if (typeof args.isSeller === "boolean") patch.isSeller = args.isSeller;
     if (args.role === "seller") patch.isSeller = true;
 

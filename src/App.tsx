@@ -16,6 +16,7 @@ import SellerDashboardPage from "./pages/seller/dashboard/page.tsx";
 import AuthPage from "./pages/auth/page.tsx"; 
 import BuyerDashboardPage from "./pages/buyer/dashboard/page.tsx";
 import WishlistPage from "./pages/wishlist/page.tsx";
+import StorefrontPage from "./pages/storefront/[sellerId].tsx";
 
 import { Toaster } from "./components/ui/sonner";
 
@@ -43,6 +44,8 @@ export default function App() {
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/admin/sso" element={<SSOLandingPage />} />
           <Route path="/seller/dashboard" element={<SellerDashboardPage />} />
+          {/* Embeddable seller storefront (used by DOABookPro booking pages) */}
+          <Route path="/storefront/:sellerId" element={<StorefrontPage />} />
           <Route path="*" element={<NotFoundPage />} />
         </Routes>
 

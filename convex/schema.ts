@@ -31,6 +31,8 @@ export default defineSchema({
     latitude: v.optional(v.number()),
     longitude: v.optional(v.number()),
     locationShared: v.optional(v.boolean()),
+    // Link to the seller's DOABookPro booking page (subdomain/slug) for the booking↔shop loop.
+    doabookproSlug: v.optional(v.string()),
   })
   .index("by_token", ["tokenIdentifier"])
   .index("email", ["email"]),

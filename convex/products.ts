@@ -54,11 +54,13 @@ async function enrichProduct(ctx: any, product: any) {
       isVerified: seller.isVerified,
       businessType: seller.businessType,
       phone: seller.phone,
+      doabookproSlug: seller.doabookproSlug,
     } : null,
     sellerName: seller?.name ?? "Aurriq Seller",
     sellerIsVerified: !!seller?.isVerified,
     sellerBusinessType: seller?.businessType,
     sellerPhone: seller?.phone,
+    sellerDoabookproSlug: seller?.doabookproSlug,
   };
 }
 

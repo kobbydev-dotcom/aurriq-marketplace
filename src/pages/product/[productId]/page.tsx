@@ -1,8 +1,8 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api.js";
-import { useState, useEffect, useRef } from "react";
-import { ShoppingCart, MessageCircle, Phone, ArrowLeft, Package, ChevronLeft, ChevronRight, Loader2, Plus, Minus, Flag, Video, Eye, Heart, Star, FileText } from "lucide-react";
+import { ShoppingCart, MessageCircle, Phone, ArrowLeft, Package, ChevronLeft, ChevronRight, Loader2, Plus, Minus, Flag, Video, Eye, Heart, Star, FileText, Calendar } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -144,6 +144,8 @@ export default function ProductDetailPage() {
 
   const sellerBusinessType = (product as any)?.seller?.businessType ?? (product as any)?.sellerBusinessType;
   const sellerPhone = (product as any)?.seller?.phone ?? (product as any)?.sellerPhone;
+  const sellerBookingSlug = (product as any)?.seller?.doabookproSlug ?? (product as any)?.sellerDoabookproSlug;
+  const bookingUrl = sellerBookingSlug ? `https://${sellerBookingSlug}.doabookpro.com` : null;
   const businessLabel =
     sellerBusinessType === "salon" ? "Salon Owner"
     : sellerBusinessType === "barbershop" ? "Barbershop Owner"
@@ -402,11 +404,20 @@ export default function ProductDetailPage() {
               </div>
             </div>
             <FollowButton userId={product.sellerId} sellerName={(product as any).seller?.name} />
-            <Authenticated>
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setRfqOpen(true)}>
-                <FileText className="size-3.5" /> Request a quote
-              </Button>
-            </Authenticated>
+            <div className="flex items-center gap-2 flex-wrap">
+              {bookingUrl && (
+                <Button asChild size="sm" className="gap-1.5">
+                  <a href={bookingUrl} target="_blank" rel="noreferrer">
+                    <Calendar className="size-3.5" /> Book this {businessLabel ? businessLabel.replace(" Owner", "") : "shop"}
+                  </a>
+                </Button>
+              )}
+              <Authenticated>
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setRfqOpen(true)}>
+                  <FileText className="size-3.5" /> Request a quote
+                </Button>
+              </Authenticated>
+            </div>
           </div>
 
           {/* Trust & Safety Banner */}
