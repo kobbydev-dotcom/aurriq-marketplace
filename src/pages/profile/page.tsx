@@ -121,7 +121,7 @@ export default function ProfilePage() {
         doabookproSlug: doabookproSlug.trim() || undefined,
       });
       sessionStorage.setItem("aurriq_profile_saved", "true");
-      window.location.reload();
+      window.location.replace(window.location.href);
     } catch (error) {
       toast.error("Failed to update profile");
       console.error(error);
