@@ -41,13 +41,17 @@ function isAnonymousPlaceholder(name: string | null | undefined) {
 // the DOABookPro client booking page to embed the owner's shop.
 export const getStorefront = query({
   args: {
-    sellerId: v.optional(v.id("users")),
+    sellerId: v.optional(v.string()),
     slug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     let seller: any = null;
     if (args.sellerId) {
-      seller = await ctx.db.get(args.sellerId);
+      try {
+        seller = await ctx.db.get(args.sellerId as any);
+      } catch {
+        seller = null;
+      }
     } else if (args.slug) {
       const all = await ctx.db.query("users").collect();
       seller = all.find((u: any) => u.doabookproSlug === args.slug) ?? null;
