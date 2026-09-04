@@ -17,6 +17,7 @@ import AuthPage from "./pages/auth/page.tsx";
 import BuyerDashboardPage from "./pages/buyer/dashboard/page.tsx";
 import WishlistPage from "./pages/wishlist/page.tsx";
 import StorefrontPage from "./pages/storefront/[sellerId].tsx";
+import CommunityPage from "./pages/community/page.tsx";
 
 import { Toaster } from "./components/ui/sonner";
 
@@ -38,6 +39,7 @@ export default function App() {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/wishlist" element={<WishlistPage />} />
             <Route path="/buyer/dashboard" element={<BuyerDashboardPage />} />
+            <Route path="/community/:view" element={<CommunityPage />} />
           </Route>
 
           {/* Registered Auth route to handle your incoming sign-ins */}

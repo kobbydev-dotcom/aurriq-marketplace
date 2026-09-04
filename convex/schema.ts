@@ -47,6 +47,7 @@ export default defineSchema({
     deletionScheduledFor: v.optional(v.number()),
     isPendingDeletion: v.optional(v.boolean()),
     lastAccessNotifiedAt: v.optional(v.number()),
+    lastSeenAt: v.optional(v.number()),
   })
   .index("by_token", ["tokenIdentifier"])
   .index("by_auth_subject", ["authSubject"])

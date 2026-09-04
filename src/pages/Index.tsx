@@ -58,10 +58,10 @@ function LiveMarketplacePulse() {
     sales: number;
   } | undefined;
   const metrics = [
-    { value: stats?.members, label: "members" },
-    { value: stats?.vendors, label: "vendors" },
-    { value: stats?.products, label: "live products" },
-    { value: stats?.sales, label: "sales completed" },
+    { value: stats?.members, label: "members", href: "/community/members" },
+    { value: stats?.vendors, label: "vendors", href: "/community/vendors" },
+    { value: stats?.products, label: "live products", href: "/community/products" },
+    { value: stats?.sales, label: "sales completed", href: "/community/sales" },
   ];
 
   return (
@@ -77,12 +77,12 @@ function LiveMarketplacePulse() {
       </div>
       <div className="grid grid-cols-2 gap-y-5 sm:grid-cols-4 sm:gap-y-0">
         {metrics.map((metric) => (
-          <div key={metric.label} className="text-center sm:border-l sm:border-[#D4AF37]/15 first:border-l-0">
+          <Link key={metric.label} to={metric.href} className="text-center sm:border-l sm:border-[#D4AF37]/15 first:border-l-0 hover:bg-[#D4AF37]/5 transition-colors py-1 rounded-sm">
             <p className="text-2xl sm:text-3xl font-light text-[#F0EAE0] tabular-nums">
               {metric.value === undefined ? "-" : <LiveCount value={metric.value} />}
             </p>
             <p className="mt-1 text-[9px] uppercase tracking-[0.2em] text-[#B1A490]/65">{metric.label}</p>
-          </div>
+          </Link>
         ))}
       </div>
     </motion.div>

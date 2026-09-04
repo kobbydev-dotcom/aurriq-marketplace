@@ -197,7 +197,7 @@ export const storeUser = mutation({
     }
 
     if (user !== null) {
-      const patch: Record<string, unknown> = {};
+      const patch: Record<string, unknown> = { lastSeenAt: Date.now() };
       if (!user.email && identityEmail) patch.email = identityEmail;
       if (!user.authSubject && authSubject) patch.authSubject = authSubject;
       if (isAnonymousPlaceholder(user.name) && providerName) patch.name = providerName;
@@ -248,6 +248,7 @@ export const storeUser = mutation({
       image: imageUrl,
       isSeller: false,
       isVerified: false,
+      lastSeenAt: Date.now(),
     });
   },
 });
