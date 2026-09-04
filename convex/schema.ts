@@ -41,6 +41,9 @@ export default defineSchema({
     marketplaceSubscriptionSource: v.optional(v.string()),
     marketplacePaidUntil: v.optional(v.number()),
     marketplacePaymentReference: v.optional(v.string()),
+    deletionRequestedAt: v.optional(v.number()),
+    deletionScheduledFor: v.optional(v.number()),
+    isPendingDeletion: v.optional(v.boolean()),
   })
   .index("by_token", ["tokenIdentifier"])
   .index("by_auth_subject", ["authSubject"])

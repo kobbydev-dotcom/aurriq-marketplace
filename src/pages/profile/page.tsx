@@ -1,15 +1,17 @@
 ﻿import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../../../convex/_generated/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { User, Mail, Shield, Camera, ArrowLeft, Loader2, Phone, Bell, Store, MapPin, Crosshair } from "lucide-react";
+import { User, Mail, Shield, Camera, ArrowLeft, Loader2, Phone, Bell, Store, MapPin, Crosshair, AlertTriangle, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Authenticated, Unauthenticated } from "convex/react";
 import { SignInButton } from "@/components/ui/signin.tsx";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog.tsx";
 
 const BUSINESS_TYPES = [
   { value: "", label: "Not a service business" },
@@ -24,11 +26,15 @@ const BUSINESS_TYPES = [
 
 export default function ProfilePage() {
   const navigate = useNavigate();
+  const { signIn, signOut } = useAuthActions();
 
   // Convex data
   const user = useQuery(api.users.current);
   const storeUser = useMutation(api.users.storeUser);
   const updateProfile = useMutation(api.users.updateProfile);
+  const scheduleDeletion = useMutation((api as any).accountDeletion.scheduleDeletion);
+  const reactivateAccount = useMutation((api as any).accountDeletion.reactivateAccount);
+  const purgeImmediately = useMutation((api as any).accountDeletion.purgeImmediately);
   const generateAvatarUploadUrl = useMutation(api.users.generateAvatarUploadUrl);
   const avatarUrl = useQuery(
     api.users.resolveAvatarUrl,
@@ -46,6 +52,11 @@ export default function ProfilePage() {
   const [locating, setLocating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
+  const [deletionOpen, setDeletionOpen] = useState(false);
+  const [deletionStep, setDeletionStep] = useState<"warning" | "confirm">("warning");
+  const [deletionMode, setDeletionMode] = useState<"scheduled" | "immediate">("scheduled");
+  const [deletionPasswords, setDeletionPasswords] = useState(["", "", ""]);
+  const [deleting, setDeleting] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -154,6 +165,43 @@ export default function ProfilePage() {
 
   const displayImage = avatarUrl ?? user?.image;
 
+  const closeDeletion = () => {
+    if (deleting) return;
+    setDeletionOpen(false);
+    setDeletionStep("warning");
+    setDeletionMode("scheduled");
+    setDeletionPasswords(["", "", ""]);
+  };
+
+  const confirmDeletion = async () => {
+    const password = deletionPasswords[0].trim();
+    if (!password || (deletionMode === "immediate" && deletionPasswords.some((value) => value !== password))) {
+      toast.error(deletionMode === "immediate" ? "Enter the same password in all three fields." : "Enter your password to continue.");
+      return;
+    }
+    if (!user?.email) {
+      toast.error("This account has no email available for password verification.");
+      return;
+    }
+    setDeleting(true);
+    try {
+      await signIn("password", { email: user.email, password, flow: "signIn" });
+      if (deletionMode === "immediate") {
+        await purgeImmediately();
+        await signOut();
+        window.location.assign("/");
+      } else {
+        await scheduleDeletion();
+        closeDeletion();
+        toast.success("Deletion scheduled. You have 7 days to reactivate your account.");
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "We could not verify your password.");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto py-10 px-4">
       <Button variant="ghost" onClick={() => navigate("/")} className="mb-6 gap-2">
@@ -168,6 +216,16 @@ export default function ProfilePage() {
       </Unauthenticated>
 
       <Authenticated>
+        {(user as any)?.isPendingDeletion && (
+          <div className="mb-6 flex items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-500/10 p-4 text-sm">
+            <AlertTriangle className="mt-0.5 size-5 shrink-0 text-amber-500" />
+            <div className="flex-1">
+              <p className="font-semibold">Account deletion is scheduled</p>
+              <p className="mt-1 text-muted-foreground">Your account and marketplace records will be permanently deleted after 7 days.</p>
+              <Button className="mt-3" size="sm" onClick={async () => { await reactivateAccount(); toast.success("Your account has been reactivated."); }}>Keep my account</Button>
+            </div>
+          </div>
+        )}
         <div className="mb-8">
           <h1 className="text-3xl font-serif tracking-tight">My Profile</h1>
           <p className="text-muted-foreground">Manage your account, contact, and business details.</p>
@@ -403,7 +461,49 @@ export default function ProfilePage() {
               </div>
             </CardContent>
           </Card>
+
+          <Card className="border-destructive/40">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2 text-destructive"><Trash2 className="size-5" /> Permanently delete account</CardTitle>
+              <CardDescription>This removes your profile, products, clients, messages, sales records, and marketplace activity.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button variant="destructive" onClick={() => setDeletionOpen(true)} disabled={(user as any)?.isPendingDeletion}>Delete account permanently</Button>
+            </CardContent>
+          </Card>
         </div>
+
+        <Dialog open={deletionOpen} onOpenChange={(open) => open ? setDeletionOpen(true) : closeDeletion()}>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>{deletionStep === "warning" ? "Are you sure you want to delete your account?" : "Confirm permanent deletion"}</DialogTitle>
+              <DialogDescription>
+                {deletionStep === "warning"
+                  ? "You will lose everything you have built on Aurriq, including products, clients, pending sales, messages, and account records."
+                  : deletionMode === "immediate"
+                    ? "Immediate deletion cannot be undone. Enter your password three times to erase your account now."
+                    : "Enter your password. Your account will be scheduled for permanent deletion in 7 days, and you can reactivate it any time before then."}
+              </DialogDescription>
+            </DialogHeader>
+
+            {deletionStep === "warning" ? (
+              <div className="space-y-3 text-sm">
+                <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-amber-700 dark:text-amber-300">Pending sales and marketplace records will not remain after deletion. This action is permanent after the seven-day recovery window.</div>
+                <label className="flex items-center gap-2"><input type="radio" checked={deletionMode === "scheduled"} onChange={() => setDeletionMode("scheduled")} /> Delete after 7 days so I can reactivate</label>
+                <label className="flex items-center gap-2"><input type="radio" checked={deletionMode === "immediate"} onChange={() => setDeletionMode("immediate")} /> Delete everything immediately</label>
+                <DialogFooter><Button variant="outline" onClick={closeDeletion}>Cancel</Button><Button variant="destructive" onClick={() => setDeletionStep("confirm")}>Yes, continue</Button></DialogFooter>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {deletionPasswords.map((value, index) => (
+                  <Input key={index} type="password" placeholder={deletionMode === "immediate" ? `Password confirmation ${index + 1}` : "Your password"} value={deletionMode === "scheduled" && index > 0 ? "" : value} disabled={deletionMode === "scheduled" && index > 0} onChange={(event) => setDeletionPasswords((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} />
+                ))}
+                <p className="text-xs text-muted-foreground">Your password is verified through Aurriq sign-in and is never stored by this deletion form.</p>
+                <DialogFooter><Button variant="outline" onClick={() => setDeletionStep("warning")} disabled={deleting}>Back</Button><Button variant="destructive" onClick={confirmDeletion} disabled={deleting}>{deleting ? "Verifying..." : deletionMode === "immediate" ? "Erase everything now" : "Schedule deletion"}</Button></DialogFooter>
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </Authenticated>
     </div>
   );
