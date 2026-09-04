@@ -370,10 +370,10 @@ export const updateProfile = mutation({
 });
 
 export const sendPasswordResetNotice = action({
-  args: {},
-  handler: async (ctx) => {
-    const user: any = await ctx.runQuery(api.users.current, {});
-    if (!user?.email) throw new Error("No login email is available for this account");
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    const user: any = await ctx.runQuery(api.users.findByEmail, { email: args.email.trim().toLowerCase() });
+    if (!user?.email) throw new Error("No Aurriq account was found for that email");
     if (user.phone) {
       await ctx.runAction(internal.sms.sendSMS, {
         to: user.phone,
@@ -381,6 +381,15 @@ export const sendPasswordResetNotice = action({
       });
     }
     return { email: user.email, phoneNotified: Boolean(user.phone) };
+  },
+});
+
+export const findByEmail = query({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    const user = await ctx.db.query("users").withIndex("email", (q) => q.eq("email", args.email.trim().toLowerCase())).unique();
+    if (!user) return null;
+    return { email: user.email, phone: user.phone };
   },
 });
 

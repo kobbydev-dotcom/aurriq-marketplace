@@ -4,6 +4,8 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { useAuthActions } from "@convex-dev/auth/react";
+import { useAction } from "convex/react";
+import { api } from "../../../convex/_generated/api.js";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X, Sparkles, Mail, Chrome, Laptop, Apple, Facebook } from "lucide-react";
 import { Button } from "../ui/button.tsx";
@@ -24,9 +26,14 @@ type SignUpFormValues = z.infer<typeof signUpSchema>;
 
 export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { signIn } = useAuthActions();
+  const sendPasswordResetNotice = useAction((api as any).users.sendPasswordResetNotice);
   const [activeAccordion, setActiveAccordion] = useState<string | null>("email");
   const [isFullSignUpFlow, setIsFullSignUpFlow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetCode, setResetCode] = useState("");
+  const [resetPassword, setResetPassword] = useState("");
+  const [resetEmail, setResetEmail] = useState("");
 
   const loginForm = useForm<LoginFormValues>({ resolver: zodResolver(loginSchema) });
   const signUpForm = useForm<SignUpFormValues>({ resolver: zodResolver(signUpSchema) });
@@ -44,6 +51,50 @@ export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange:
       onOpenChange(false);
     } catch (err) {
       toast.error("Invalid credentials. Please try again.", { id: toastId });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const requestPasswordReset = async () => {
+    const email = loginForm.getValues("email").trim().toLowerCase();
+    if (!email) {
+      toast.error("Enter your email address first.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      setResetEmail(email);
+      await sendPasswordResetNotice({ email });
+      await signIn("password", { email, flow: "reset" });
+      setResetOpen(true);
+      toast.success("A password reset code was sent to your email.");
+    } catch {
+      toast.error("We could not send a reset code. Check the email and try again.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const completePasswordReset = async () => {
+    if (!resetCode.trim() || resetPassword.length < 6) {
+      toast.error("Enter the reset code and a password with at least 6 characters.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await signIn("password", {
+        email: resetEmail,
+        flow: "reset-verification",
+        code: resetCode.trim(),
+        newPassword: resetPassword,
+      });
+      setResetOpen(false);
+      setResetCode("");
+      setResetPassword("");
+      toast.success("Your password has been reset. You can now log in.");
+    } catch {
+      toast.error("That reset code is invalid or expired.");
     } finally {
       setSubmitting(false);
     }
@@ -169,11 +220,27 @@ export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange:
                           <Button type="submit" disabled={submitting} size="sm" className="w-full h-8 text-xs tracking-wide cursor-pointer mt-1">
                             {submitting ? "Verifying..." : "Log In"}
                           </Button>
+                          {p.id === "email" && (
+                            <button type="button" onClick={requestPasswordReset} disabled={submitting} className="w-full text-[11px] text-primary hover:underline disabled:opacity-50">
+                              Forgot your password?
+                            </button>
+                          )}
                         </form>
                       )}
                     </div>
                   </div>
                 );
+
+                {resetOpen && (
+                  <div className="mt-4 rounded-xl border border-primary/30 bg-primary/5 p-4 space-y-3">
+                    <p className="text-xs text-muted-foreground">Enter the code sent to {resetEmail}, then choose a new password.</p>
+                    <Input type="text" inputMode="numeric" placeholder="Password reset code" value={resetCode} onChange={(event) => setResetCode(event.target.value)} />
+                    <Input type="password" placeholder="New password" value={resetPassword} onChange={(event) => setResetPassword(event.target.value)} />
+                    <Button type="button" onClick={completePasswordReset} disabled={submitting} className="w-full">
+                      {submitting ? "Saving..." : "Save new password"}
+                    </Button>
+                  </div>
+                )}
               })}
 
               <div className="text-center pt-4 border-t border-border/40 mt-4">

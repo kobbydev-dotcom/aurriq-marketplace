@@ -194,7 +194,7 @@ export default function ProfilePage() {
       return;
     }
     try {
-      await sendPasswordResetNotice({});
+      await sendPasswordResetNotice({ email: user.email });
       if (hasPasswordAccount) {
         await signIn("password", { email: user.email, flow: "reset" });
         setResetMode("reset");
