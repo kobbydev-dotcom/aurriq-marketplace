@@ -24,7 +24,7 @@ type SignUpFormValues = z.infer<typeof signUpSchema>;
 
 export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { signIn } = useAuthActions();
-  const [activeAccordion, setActiveAccordion] = useState<string | null>(null);
+  const [activeAccordion, setActiveAccordion] = useState<string | null>("email");
   const [isFullSignUpFlow, setIsFullSignUpFlow] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
