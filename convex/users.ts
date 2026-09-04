@@ -181,7 +181,12 @@ export const storeUser = mutation({
         .withIndex("email", (q) => q.eq("email", identityEmail))
         .unique();
       if (user) {
-        await ctx.db.patch(user._id, { tokenIdentifier: identity.tokenIdentifier });
+        const patch: Record<string, unknown> = {
+          tokenIdentifier: identity.tokenIdentifier,
+        };
+        if (isAnonymousPlaceholder(user.name) && providerName) patch.name = providerName;
+        if (!user.image && providerImage) patch.image = providerImage;
+        await ctx.db.patch(user._id, patch as any);
         return user._id;
       }
     }
