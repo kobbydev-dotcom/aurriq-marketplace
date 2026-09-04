@@ -12,6 +12,29 @@ function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
+function humanizeEmailLocalPart(email: string | undefined) {
+  const local = String(email ?? "").split("@")[0].replace(/[._-]+/g, " ").trim();
+  if (!local) return "";
+  return local
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+    .join(" ");
+}
+
+function identityDisplayName(identity: any, email: string | undefined) {
+  const direct = String(identity?.name ?? "").trim();
+  if (direct) return direct;
+  const given = String(identity?.givenName ?? identity?.given_name ?? "").trim();
+  const family = String(identity?.familyName ?? identity?.family_name ?? "").trim();
+  if (given || family) return [given, family].filter(Boolean).join(" ");
+  return humanizeEmailLocalPart(email);
+}
+
+function isAnonymousPlaceholder(name: string | null | undefined) {
+  return !name || /^(anonymous buyer|anonymous|new user|user)$/i.test(name.trim());
+}
+
 // Public: sellers/service businesses who opted in to share their shop location,
 // sorted by distance from the given coordinates.
 // Public: a seller's storefront by Convex user id or DOABookPro slug — used by
@@ -130,6 +153,8 @@ export const storeUser = mutation({
     const identityEmail = typeof (identity as any).email === "string"
       ? String((identity as any).email).trim().toLowerCase()
       : undefined;
+    const providerName = identityDisplayName(identity, identityEmail);
+    const providerImage = identity.picture || (identity as any).pictureUrl || undefined;
 
     // Prefer the auth token, but fall back to email so a login round-trip or
     // provider change cannot create a second anonymous marketplace profile.
@@ -141,6 +166,8 @@ export const storeUser = mutation({
     if (user !== null) {
       const patch: Record<string, unknown> = {};
       if (!user.email && identityEmail) patch.email = identityEmail;
+      if (isAnonymousPlaceholder(user.name) && providerName) patch.name = providerName;
+      if (!user.image && providerImage) patch.image = providerImage;
       if (!user.tokenIdentifier || user.tokenIdentifier !== identity.tokenIdentifier) {
         patch.tokenIdentifier = identity.tokenIdentifier;
       }
@@ -159,8 +186,8 @@ export const storeUser = mutation({
       }
     }
 
-    const name = identity.name ?? identityEmail?.split("@")[0] ?? "Anonymous Buyer";
-    const imageUrl = identity.picture || (identity as any).pictureUrl || undefined;
+    const name = providerName || "Anonymous Buyer";
+    const imageUrl = providerImage;
 
     return await ctx.db.insert("users", {
       tokenIdentifier: identity.tokenIdentifier!,
