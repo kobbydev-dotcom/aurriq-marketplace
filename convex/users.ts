@@ -165,15 +165,17 @@ export const storeUser = mutation({
 
     // Prefer the auth token, but fall back to email so a login round-trip or
     // provider change cannot create a second anonymous marketplace profile.
-    let user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-
-    if (user === null && authSubject) {
-      user = await ctx.db
+    let user = authSubject
+      ? await ctx.db
         .query("users")
         .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
+        .unique()
+      : null;
+
+    if (user === null) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
         .unique();
     }
 
@@ -228,21 +230,20 @@ export const current = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
-    const user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
-      .unique();
-
-    if (user) return user;
-
     const authSubject = typeof (identity as any).subject === "string"
       ? String((identity as any).subject).trim()
       : undefined;
-    if (!authSubject) return null;
+    if (authSubject) {
+      const user = await ctx.db
+        .query("users")
+        .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
+        .unique();
+      if (user) return user;
+    }
 
     return await ctx.db
       .query("users")
-      .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
   },
 });
