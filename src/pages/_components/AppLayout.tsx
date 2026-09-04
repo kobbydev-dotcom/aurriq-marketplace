@@ -1,9 +1,7 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { ShoppingBag, ShoppingCart, MessageSquare, ClipboardList, LayoutDashboard, LogOut, Heart } from "lucide-react";
+import { ShoppingBag, ShoppingCart, MessageSquare, ClipboardList, LayoutDashboard, Heart } from "lucide-react";
 import { Authenticated, Unauthenticated } from "convex/react";
 import { SignInButton } from "@/components/ui/signin.tsx";
-import { useAuth } from "@/hooks/use-auth.ts";
-import { Button } from "@/components/ui/button";
 import { NotificationBell } from "@/components/notifications.tsx";
 import { cn } from "@/lib/utils";
 
@@ -20,18 +18,9 @@ const navLinks = [
 export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
-  const { signout } = useAuth();
-  const isSso = localStorage.getItem("marketplace_seller_id") !== null;
 
   const handleNavClick = (path: string) => {
     navigate(path);
-  };
-
-  const handleSignOut = async () => {
-    localStorage.removeItem("marketplace_seller_id");
-    localStorage.removeItem("marketplace_seller_subdomain");
-    await signout?.();
-    navigate("/");
   };
 
   return (
@@ -65,20 +54,7 @@ export default function AppLayout() {
             <Authenticated>
               <NotificationBell />
             </Authenticated>
-            {isSso ? (
-              <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground" onClick={handleSignOut}>
-                <LogOut className="size-3.5" /> Sign Out
-              </Button>
-            ) : (
-              <>
-                <Unauthenticated><SignInButton /></Unauthenticated>
-                <Authenticated>
-                  <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground" onClick={handleSignOut}>
-                    <LogOut className="size-3.5" /> Sign Out
-                  </Button>
-                </Authenticated>
-              </>
-            )}
+            <Unauthenticated><SignInButton /></Unauthenticated>
           </div>
         </div>
       </header>

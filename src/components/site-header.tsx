@@ -3,7 +3,7 @@ import { Unauthenticated, Authenticated, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../../convex/_generated/api";
 import { SignInButton } from "@/components/ui/signin.tsx";
-import { ShoppingCart, Menu, X, User, Store, Settings, LogOut } from "lucide-react";
+import { ShoppingCart, Menu, X, User, Store, LogOut } from "lucide-react";
 import { useState, useEffect } from "react";
 import { CATEGORIES } from "@/lib/constants.ts";
 import { motion } from "motion/react";
@@ -131,7 +131,6 @@ export default function SiteHeader() {
               <DropdownMenuContent align="end" className="w-56 bg-[#0A0600] border-[#C9930A]/20 text-[#F0EAE0]">
                 <DropdownMenuItem onClick={() => navigate("/profile")}><User className="mr-2 size-4" /> Profile</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate("/seller/dashboard")}><Store className="mr-2 size-4" /> Vendor Dashboard</DropdownMenuItem>
-                <DropdownMenuItem onClick={() => navigate("/profile")}><Settings className="mr-2 size-4" /> General Settings</DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-[#C9930A]/10" />
                 <DropdownMenuItem 
                   className="text-red-400 cursor-pointer" 
