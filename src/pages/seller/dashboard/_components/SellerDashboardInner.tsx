@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   Plus, Package, TrendingUp, AlertTriangle, ShoppingBag,
   MoreVertical, Pencil, Trash2, ToggleLeft, ToggleRight, Tag, MessageSquare, ArrowLeft,
-  Clock, CheckCircle, Truck, PackageCheck, XCircle, Store, CreditCard, Smartphone, ShieldCheck
+  Clock, CheckCircle, Truck, PackageCheck, XCircle, Store, CreditCard, Smartphone, ShieldCheck, Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
@@ -242,10 +242,26 @@ function SellerOrdersTab({ onContactBuyer }: { onContactBuyer: (buyerId: Id<"use
   // Safe layout downcasting to bypass missing file endpoint flags on the schema surface
   const getSellerOrders = ((api.orders as any).getSellerOrders || (api.products as any).listAll) as any;
   const updateOrderStatus = ((api.orders as any).updateOrderStatus || (api.products as any).listAll) as any;
+  const markBalanceCollected = ((api.orders as any).markBalanceCollected || (api.products as any).listAll) as any;
 
   const orders = useQuery(getSellerOrders, {});
   const updateStatus = useMutation(updateOrderStatus) as any;
+  const collectBalance = useMutation(markBalanceCollected) as any;
   const [updating, setUpdating] = useState<string | null>(null);
+  const [collecting, setCollecting] = useState<string | null>(null);
+
+  const handleCollectBalance = async (orderId: string) => {
+    setCollecting(orderId);
+    try {
+      await collectBalance({ orderId });
+      toast.success("Balance marked as collected — order fully settled");
+    } catch (e) {
+      const msg = e instanceof ConvexError ? (e.data as { message: string }).message : "Failed to update";
+      toast.error(msg);
+    } finally {
+      setCollecting(null);
+    }
+  };
 
   const handleStatusChange = async (orderId: string, newStatus: SellerOrderStatus) => {
     setUpdating(orderId);
@@ -316,6 +332,17 @@ function SellerOrdersTab({ onContactBuyer }: { onContactBuyer: (buyerId: Id<"use
                           </Badge>
                         )}
                         {order.buyerPhone && <Badge variant="outline" className="text-[10px]">{order.buyerPhone}</Badge>}
+                        {order.depositAmount != null && order.balanceAmount != null && (
+                          order.balancePaid ? (
+                            <Badge className="text-[10px] bg-emerald-500/20 text-emerald-400 border-emerald-500/30">Deposit + balance paid</Badge>
+                          ) : order.depositPaid ? (
+                            <Badge className="text-[10px] bg-amber-500/20 text-amber-400 border-amber-500/30">
+                              Deposit paid · balance {formatCurrency(order.balanceAmount)} on delivery
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[10px]">Deposit pending</Badge>
+                          )
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {formatDistanceToNow(order._creationTime, { addSuffix: true })}
@@ -352,6 +379,18 @@ function SellerOrdersTab({ onContactBuyer }: { onContactBuyer: (buyerId: Id<"use
                     <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => onContactBuyer(order.buyerId)}>
                       <MessageSquare className="size-3" /> Contact buyer
                     </Button>
+                    {order.depositPaid && !order.balancePaid && order.balanceAmount != null && order.balanceAmount > 0 && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 gap-1.5 text-xs"
+                        disabled={collecting === order._id}
+                        onClick={() => handleCollectBalance(order._id)}
+                      >
+                        {collecting === order._id ? <Loader2 className="size-3 animate-spin" /> : <CreditCard className="size-3" />}
+                        Balance collected
+                      </Button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -486,6 +525,7 @@ export default function SellerDashboardInner() {
   const getCurrentUser = api.users.current;
   const getSellerOrdersQuery = ((api.orders as any).getSellerOrders || (api.products as any).listAll) as any;
   const getMyActivity = ((api.notifications as any).getMyActivity || (api.products as any).listAll) as any;
+  const getTotalUnreadCount = ((api.messages as any).getTotalUnreadCount || (api.products as any).listAll) as any;
   const updateProductEndpoint = ((api.products as any).updateProduct || (api.products as any).listAll) as any;
   const deleteProductEndpoint = ((api.products as any).deleteProduct || (api.products as any).listAll) as any;
   const updateProfileEndpoint = ((api.users as any).updateProfile || (api.products as any).listAll) as any;
@@ -495,6 +535,7 @@ export default function SellerDashboardInner() {
   const currentUser = useQuery(getCurrentUser, {});
   const sellerOrders = useQuery(getSellerOrdersQuery, {});
   const activity = useQuery(getMyActivity, {});
+  const unreadMessages = useQuery(getTotalUnreadCount, {}) as number | undefined;
   
   const updateProduct = useMutation(updateProductEndpoint) as any;
   const deleteProduct = useMutation(deleteProductEndpoint) as any;
@@ -644,6 +685,11 @@ export default function SellerDashboardInner() {
           </TabsTrigger>
           <TabsTrigger value="messages" className="gap-2 cursor-pointer">
             <MessageSquare className="size-3.5" /> Messages
+            {(unreadMessages ?? 0) > 0 && (
+              <span className="ml-1 size-4 rounded-full bg-primary text-[9px] font-bold text-primary-foreground flex items-center justify-center">
+                {(unreadMessages ?? 0) > 99 ? "99+" : unreadMessages}
+              </span>
+            )}
           </TabsTrigger>
           <TabsTrigger value="payments" className="gap-2 cursor-pointer">
             <CreditCard className="size-3.5" /> Payments

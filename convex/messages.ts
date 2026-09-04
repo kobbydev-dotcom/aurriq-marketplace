@@ -52,6 +52,24 @@ export const sendMessage = mutation({
   },
 });
 
+export const getTotalUnreadCount = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return 0;
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+    if (!user) return 0;
+    const received = await ctx.db
+      .query("messages")
+      .withIndex("by_receiver", (q) => q.eq("receiverId", user._id))
+      .collect();
+    return received.filter((m) => !m.isRead).length;
+  },
+});
+
 export const markAsRead = mutation({
   args: { messageId: v.id("messages") },
   handler: async (ctx, args) => {

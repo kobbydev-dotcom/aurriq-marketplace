@@ -33,6 +33,10 @@ function OrderCard({
     totalAmount: number;
     status: OrderStatus;
     buyerNote?: string;
+    depositAmount?: number;
+    balanceAmount?: number;
+    depositPaid?: boolean;
+    balancePaid?: boolean;
     product: { _id: string; name: string; brand: string; images: string[] } | null;
     sellerName: string;
   };
@@ -80,6 +84,23 @@ function OrderCard({
         </div>
         <p className="font-semibold text-primary">{formatCurrency(order.totalAmount)}</p>
       </div>
+
+      {order.depositAmount != null && order.balanceAmount != null && (
+        <div className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs space-y-0.5">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Deposit paid online</span>
+            <span className={order.depositPaid ? "text-emerald-500 font-medium" : "text-muted-foreground"}>
+              {formatCurrency(order.depositAmount)} {order.depositPaid ? "✓" : "(pending)"}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Balance on delivery</span>
+            <span className={order.balancePaid ? "text-emerald-500 font-medium" : "text-amber-500 font-medium"}>
+              {formatCurrency(order.balanceAmount)} {order.balancePaid ? "✓ collected" : "(due)"}
+            </span>
+          </div>
+        </div>
+      )}
 
       {order.buyerNote && (
         <p className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2 italic">

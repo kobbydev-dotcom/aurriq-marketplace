@@ -258,3 +258,45 @@ export const updateOrderStatus = mutation({
     });
   },
 });
+
+// Seller marks a deposit order's remaining balance as collected on delivery.
+export const markBalanceCollected = mutation({
+  args: { orderId: v.id("orders") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not logged in" });
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+    if (!user) throw new ConvexError({ code: "NOT_FOUND", message: "User not found" });
+
+    const order = await ctx.db.get(args.orderId);
+    if (!order) throw new ConvexError({ code: "NOT_FOUND", message: "Order not found" });
+    if (order.sellerId !== user._id) throw new ConvexError({ code: "FORBIDDEN", message: "Not your order" });
+    if (order.balancePaid) throw new ConvexError({ code: "BAD_REQUEST", message: "Balance already settled" });
+
+    await ctx.db.patch(args.orderId, {
+      balancePaid: true,
+      status: "delivered",
+    });
+
+    const product = await ctx.db.get(order.productId);
+
+    // Audit trail for the seller.
+    await ctx.runMutation(internal.notifications.logActivity, {
+      userId: user._id,
+      action: `Balance collected (GHS ${(order.balanceAmount ?? 0).toFixed(2)}) for ${product?.name ?? "order"}`,
+      meta: { orderId: args.orderId, balance: order.balanceAmount },
+    });
+
+    // Notify the buyer the order is fully settled.
+    await ctx.runMutation(internal.notifications.createNotification, {
+      userId: order.buyerId,
+      type: "payment",
+      title: "Order fully paid",
+      body: `Your balance for ${product?.name ?? "your order"} was collected on delivery. Enjoy!`,
+      link: "/orders",
+    });
+  },
+});
