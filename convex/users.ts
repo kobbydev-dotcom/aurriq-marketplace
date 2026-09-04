@@ -1,6 +1,52 @@
 import { mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 
+// Haversine distance in kilometers between two coordinates.
+function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// Public: sellers/service businesses who opted in to share their shop location,
+// sorted by distance from the given coordinates.
+export const getNearbyShops = query({
+  args: {
+    latitude: v.number(),
+    longitude: v.number(),
+    radiusKm: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
+    const sellers = await ctx.db.query("users").collect();
+    const radius = args.radiusKm ?? 50;
+
+    const withDistance = sellers
+      .filter(
+        (s: any) =>
+          s.locationShared &&
+          typeof s.latitude === "number" &&
+          typeof s.longitude === "number"
+      )
+      .map((s: any) => ({
+        _id: s._id,
+        name: s.name,
+        image: s.image ?? s.avatar,
+        businessType: s.businessType,
+        isVerified: s.isVerified,
+        locationLabel: s.locationLabel,
+        distanceKm: distanceKm(args.latitude, args.longitude, s.latitude, s.longitude),
+      }))
+      .filter((s: any) => s.distanceKm <= radius)
+      .sort((a: any, b: any) => a.distanceKm - b.distanceKm);
+
+    return withDistance;
+  },
+});
+
 export const storeUser = mutation({
   args: {},
   handler: async (ctx) => {
@@ -63,6 +109,10 @@ export const updateProfile = mutation({
     businessType: v.optional(v.string()),
     notifyEmail: v.optional(v.string()),
     avatarStorageId: v.optional(v.string()),
+    locationLabel: v.optional(v.string()),
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
+    locationShared: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -111,6 +161,10 @@ export const updateProfile = mutation({
     if (typeof args.businessType === "string") patch.businessType = args.businessType;
     if (typeof args.notifyEmail === "string") patch.notifyEmail = args.notifyEmail.trim();
     if (typeof args.avatarStorageId === "string") patch.avatarStorageId = args.avatarStorageId;
+    if (typeof args.locationLabel === "string") patch.locationLabel = args.locationLabel.trim();
+    if (typeof args.latitude === "number") patch.latitude = args.latitude;
+    if (typeof args.longitude === "number") patch.longitude = args.longitude;
+    if (typeof args.locationShared === "boolean") patch.locationShared = args.locationShared;
     if (typeof args.isSeller === "boolean") patch.isSeller = args.isSeller;
     if (args.role === "seller") patch.isSeller = true;
 

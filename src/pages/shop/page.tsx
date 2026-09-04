@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api.js";
 import { useSearchParams, Link } from "react-router-dom";
-import { Search, Package } from "lucide-react";
+import { Search, Package, MapPin, Loader2, Navigation, Store } from "lucide-react";
 import { Input } from "@/components/ui/input.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -22,6 +22,116 @@ const CATEGORIES = [
   { value: "fragrance", label: "Fragrance" },
   { value: "tools", label: "Tools" },
 ];
+
+const BUSINESS_LABEL: Record<string, string> = {
+  salon: "Salon",
+  barbershop: "Barbershop",
+  nail_tech: "Nail Tech",
+  lash_tech: "Lash Tech",
+  makeup: "Makeup Artist",
+  spa: "Spa",
+  other: "Beauty Pro",
+};
+
+// "Near You" — opt-in buyer geolocation listing nearby shops/sellers.
+function NearYouSection() {
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [enabled, setEnabled] = useState(false);
+
+  const nearby = useQuery(
+    (api.users as any).getNearbyShops,
+    enabled && coords ? { latitude: coords.lat, longitude: coords.lng } : "skip"
+  ) as any[] | undefined;
+
+  const detect = () => {
+    if (!("geolocation" in navigator)) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setEnabled(true);
+        setLocating(false);
+      },
+      () => setLocating(false),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  return (
+    <div className="mb-10">
+      <div className="flex items-center justify-between gap-3 mb-4">
+        <div>
+          <h2 className="text-lg font-medium flex items-center gap-2">
+            <Navigation className="size-4 text-primary" /> Shops near you
+          </h2>
+          <p className="text-xs text-muted-foreground">Salons, barbershops, nail & lash techs and sellers close to you.</p>
+        </div>
+        <button
+          onClick={detect}
+          disabled={locating}
+          className={cn(
+            "shrink-0 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors cursor-pointer",
+            enabled ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/50"
+          )}
+        >
+          {locating ? <Loader2 className="size-3.5 animate-spin" /> : <MapPin className="size-3.5" />}
+          {enabled ? "Location on" : "Use my location"}
+        </button>
+      </div>
+
+      {!enabled ? (
+        <p className="text-xs text-muted-foreground border border-dashed border-border rounded-xl px-4 py-6 text-center">
+          Turn on location to discover shops and beauty pros around you. We only use it to sort by distance — nothing is stored or shared.
+        </p>
+      ) : nearby === undefined ? (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
+        </div>
+      ) : nearby.length === 0 ? (
+        <p className="text-xs text-muted-foreground border border-dashed border-border rounded-xl px-4 py-6 text-center">
+          No shops near you yet. Sellers who share their location will appear here.
+        </p>
+      ) : (
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+          {nearby.map((s) => (
+            <Link
+              key={s._id}
+              to={`/shop?sellerId=${s._id}`}
+              className="group rounded-xl border border-border bg-card p-4 hover:border-primary/50 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="size-11 rounded-full bg-muted overflow-hidden flex items-center justify-center shrink-0 border border-border">
+                  {s.image ? (
+                    <img src={s.image} alt={s.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <Store className="size-5 text-muted-foreground" />
+                  )}
+                </div>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium truncate group-hover:text-primary transition-colors flex items-center gap-1">
+                    {s.name}
+                    {s.isVerified && <VerifiedBadge size="xs" />}
+                  </p>
+                  {s.businessType && (
+                    <span className="inline-block text-[9px] font-medium px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/30 mt-0.5">
+                      {BUSINESS_LABEL[s.businessType] ?? "Beauty Pro"}
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="mt-3 flex items-center gap-1 text-[11px] text-muted-foreground">
+                <MapPin className="size-3 text-primary shrink-0" />
+                <span className="truncate">{s.locationLabel ?? "Nearby"}</span>
+                <span className="ml-auto shrink-0 font-medium text-foreground">{s.distanceKm < 1 ? `${Math.round(s.distanceKm * 1000)} m` : `${s.distanceKm.toFixed(1)} km`}</span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function ShopPage() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -101,6 +211,9 @@ export default function ShopPage() {
           ))}
         </div>
       </div>
+
+      {/* Nearby shops discovery */}
+      {!sellerIdParam && <NearYouSection />}
 
       {/* Products Grid */}
       {products === undefined ? (

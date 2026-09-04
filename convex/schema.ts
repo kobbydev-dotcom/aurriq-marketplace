@@ -26,6 +26,11 @@ export default defineSchema({
     notifyEmail: v.optional(v.string()),
     // Convex storage id for an uploaded avatar (resolved to a URL at query time).
     avatarStorageId: v.optional(v.string()),
+    // Opt-in shop/user location for the "near you" discovery feature.
+    locationLabel: v.optional(v.string()),
+    latitude: v.optional(v.number()),
+    longitude: v.optional(v.number()),
+    locationShared: v.optional(v.boolean()),
   })
   .index("by_token", ["tokenIdentifier"])
   .index("email", ["email"]),

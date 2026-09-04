@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { User, Mail, Shield, Camera, ArrowLeft, Loader2, Phone, Bell, Store } from "lucide-react";
+import { User, Mail, Shield, Camera, ArrowLeft, Loader2, Phone, Bell, Store, MapPin, Crosshair } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Authenticated, Unauthenticated } from "convex/react";
@@ -38,6 +38,10 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("");
   const [notifyEmail, setNotifyEmail] = useState("");
   const [businessType, setBusinessType] = useState("");
+  const [locationLabel, setLocationLabel] = useState("");
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [locationShared, setLocationShared] = useState(false);
+  const [locating, setLocating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
@@ -49,8 +53,33 @@ export default function ProfilePage() {
       setPhone(user.phone ?? "");
       setNotifyEmail((user as any).notifyEmail ?? "");
       setBusinessType((user as any).businessType ?? "");
+      setLocationLabel((user as any).locationLabel ?? "");
+      setLocationShared((user as any).locationShared ?? false);
+      if (typeof (user as any).latitude === "number" && typeof (user as any).longitude === "number") {
+        setCoords({ lat: (user as any).latitude, lng: (user as any).longitude });
+      }
     }
   }, [user]);
+
+  const detectLocation = () => {
+    if (!("geolocation" in navigator)) {
+      toast.error("Your device/browser doesn't support location.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocating(false);
+        toast.success("Location captured — remember to Save Changes.");
+      },
+      () => {
+        setLocating(false);
+        toast.error("Couldn't get your location. Check browser permission.");
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
 
   const getInitials = (name: string | undefined) => {
     if (!name) return "U";
@@ -75,6 +104,10 @@ export default function ProfilePage() {
         phone: phone.trim() || undefined,
         notifyEmail: notifyEmail.trim() || undefined,
         businessType: businessType || undefined,
+        locationLabel: locationLabel.trim() || undefined,
+        latitude: coords?.lat,
+        longitude: coords?.lng,
+        locationShared,
       });
       toast.success("Profile updated successfully!");
     } catch (error) {
@@ -260,6 +293,64 @@ export default function ProfilePage() {
               <Button onClick={handleSave} disabled={isLoading || !fullName.trim()}>
                 {isLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
                 {isLoading ? "Saving..." : "Save Changes"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Location Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <MapPin className="size-5" /> Location
+              </CardTitle>
+              <CardDescription>
+                Share your shop's location so nearby buyers can discover you. This is opt-in — nothing is shown unless you turn on sharing.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Shop / area label</Label>
+                <Input
+                  placeholder="e.g. Osu, Accra — near Oxford Street"
+                  value={locationLabel}
+                  onChange={(e) => setLocationLabel(e.target.value)}
+                />
+                <p className="text-xs text-muted-foreground">A friendly description of where your shop is.</p>
+              </div>
+
+              <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+                <Button type="button" variant="outline" onClick={detectLocation} disabled={locating} className="gap-2">
+                  {locating ? <Loader2 className="size-4 animate-spin" /> : <Crosshair className="size-4" />}
+                  {locating ? "Detecting..." : coords ? "Update my current location" : "Use my current location"}
+                </Button>
+                {coords && (
+                  <p className="text-xs text-muted-foreground">
+                    Captured: {coords.lat.toFixed(4)}, {coords.lng.toFixed(4)}
+                  </p>
+                )}
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setLocationShared((v) => !v)}
+                className={`w-full flex items-center justify-between rounded-xl border px-4 py-3 transition-colors cursor-pointer ${locationShared ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"}`}
+              >
+                <div className="text-left">
+                  <p className="text-sm font-medium">Show my location to buyers</p>
+                  <p className="text-xs text-muted-foreground">
+                    {locationShared
+                      ? "Your shop appears in the \"Near You\" section with your label and distance."
+                      : "Turn on to appear in \"Near You\" results."}
+                  </p>
+                </div>
+                <span className={`relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors ${locationShared ? "bg-primary" : "bg-muted"}`}>
+                  <span className={`absolute top-0.5 left-0.5 size-5 rounded-full bg-white transition-transform ${locationShared ? "translate-x-5" : ""}`} />
+                </span>
+              </button>
+
+              <Button onClick={handleSave} disabled={isLoading}>
+                {isLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
+                {isLoading ? "Saving..." : "Save Location"}
               </Button>
             </CardContent>
           </Card>
