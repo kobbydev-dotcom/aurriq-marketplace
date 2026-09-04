@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../../../../convex/_generated/api.js";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
@@ -543,7 +543,7 @@ export default function SellerDashboardInner() {
   const updateProduct = useMutation(updateProductEndpoint) as any;
   const deleteProduct = useMutation(deleteProductEndpoint) as any;
   const updateProfile = useMutation(updateProfileEndpoint) as any;
-  const verifyMarketplaceSubscription = useMutation((api.payments as any).verifyMarketplaceSubscription);
+  const recoverMarketplaceSubscription = useAction((api.payments as any).recoverMarketplaceSubscription);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Doc<"products"> | null>(null);
@@ -552,23 +552,38 @@ export default function SellerDashboardInner() {
   const [selectedBuyerId, setSelectedBuyerId] = useState<Id<"users"> | null>(null);
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
+  const [recoveringPayment, setRecoveringPayment] = useState(false);
+  const recoveryAttempted = useRef(false);
+
+  useEffect(() => {
+    if (currentUser?.role === "seller") {
+      setRecoveringPayment(false);
+      localStorage.removeItem("aurriq_pending_vendor_payment");
+    }
+  }, [currentUser?.role]);
 
   useEffect(() => {
     const reference = searchParams.get("reference") || localStorage.getItem("aurriq_pending_vendor_payment");
-    if (!reference || currentUser === undefined) return;
+    if (!reference || currentUser === undefined || currentUser?.role === "seller" || recoveryAttempted.current) return;
 
-    verifyMarketplaceSubscription({ paymentReference: reference })
+    recoveryAttempted.current = true;
+    setRecoveringPayment(true);
+    recoverMarketplaceSubscription({ paymentReference: reference })
       .then(() => {
         localStorage.removeItem("aurriq_pending_vendor_payment");
-        toast.success("Payment received. Verifying your marketplace access...");
+        toast.success("Payment confirmed. Your vendor dashboard is ready.");
       })
-      .catch((error) => toast.error(error instanceof Error ? error.message : "Unable to verify payment"))
+      .catch((error) => {
+        recoveryAttempted.current = false;
+        setRecoveringPayment(false);
+        toast.error(error instanceof Error ? error.message : "Unable to verify payment");
+      })
       .finally(() => {
         searchParams.delete("subscription");
         searchParams.delete("reference");
         setSearchParams(searchParams, { replace: true });
       });
-  }, [currentUser, searchParams, setSearchParams, verifyMarketplaceSubscription]);
+  }, [currentUser, searchParams, setSearchParams, recoverMarketplaceSubscription]);
 
   const handleEdit = (p: Doc<"products">) => {
     setEditTarget(p);
@@ -627,6 +642,20 @@ export default function SellerDashboardInner() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-56 w-full" />)}
         </div>
+      </div>
+    );
+  }
+
+  if (recoveringPayment) {
+    return (
+      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 text-center px-4">
+        <Loader2 className="size-8 text-primary animate-spin" />
+        <h2 className="text-2xl font-light" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
+          Confirming your marketplace payment
+        </h2>
+        <p className="text-sm text-muted-foreground max-w-sm">
+          We’re verifying your successful payment and opening your vendor dashboard. You will not be charged again.
+        </p>
       </div>
     );
   }
