@@ -17,6 +17,7 @@ import type * as messages from "../messages.js";
 import type * as orders from "../orders.js";
 import type * as payments from "../payments.js";
 import type * as products from "../products.js";
+import type * as receipts from "../receipts.js";
 import type * as reports from "../reports.js";
 import type * as seed from "../seed.js";
 import type * as sms from "../sms.js";
@@ -38,6 +39,7 @@ declare const fullApi: ApiFromModules<{
   orders: typeof orders;
   payments: typeof payments;
   products: typeof products;
+  receipts: typeof receipts;
   reports: typeof reports;
   seed: typeof seed;
   sms: typeof sms;
