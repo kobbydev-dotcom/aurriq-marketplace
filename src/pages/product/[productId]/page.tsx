@@ -2,7 +2,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api.js";
 import { useState, useEffect, useRef } from "react";
-import { ShoppingCart, MessageCircle, Phone, ArrowLeft, Package, ChevronLeft, ChevronRight, Loader2, Plus, Minus, Flag, Video, Eye, Heart, Star } from "lucide-react";
+import { ShoppingCart, MessageCircle, Phone, ArrowLeft, Package, ChevronLeft, ChevronRight, Loader2, Plus, Minus, Flag, Video, Eye, Heart, Star, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -63,9 +63,38 @@ export default function ProductDetailPage() {
     productId ? { productId: productId as Id<"products"> } : "skip"
   ) as any;
   const addReview = useMutation((api.reviews as any).addReview);
+  const submitRfq = useMutation((api.rfq as any).submitRfq);
   const [myRating, setMyRating] = useState(0);
   const [myComment, setMyComment] = useState("");
   const [savingReview, setSavingReview] = useState(false);
+  const [rfqOpen, setRfqOpen] = useState(false);
+  const [rfqQty, setRfqQty] = useState(10);
+  const [rfqTarget, setRfqTarget] = useState("");
+  const [rfqMessage, setRfqMessage] = useState("");
+  const [submittingRfq, setSubmittingRfq] = useState(false);
+
+  const handleSubmitRfq = async () => {
+    if (!product) return;
+    setSubmittingRfq(true);
+    try {
+      await submitRfq({
+        sellerId: product.sellerId,
+        productId: product._id,
+        quantity: rfqQty,
+        targetPrice: rfqTarget ? Number(rfqTarget) : undefined,
+        message: rfqMessage.trim() || undefined,
+      });
+      toast.success("Quote request sent to the seller");
+      setRfqOpen(false);
+      setRfqMessage("");
+      setRfqTarget("");
+    } catch (e) {
+      const msg = e instanceof ConvexError ? (e.data as { message: string }).message : "Failed to send request";
+      toast.error(msg);
+    } finally {
+      setSubmittingRfq(false);
+    }
+  };
 
   const ratingAvg = (product as any)?.ratingAvg as number | undefined;
   const ratingCount = (product as any)?.ratingCount as number | undefined;
@@ -373,6 +402,11 @@ export default function ProductDetailPage() {
               </div>
             </div>
             <FollowButton userId={product.sellerId} sellerName={(product as any).seller?.name} />
+            <Authenticated>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setRfqOpen(true)}>
+                <FileText className="size-3.5" /> Request a quote
+              </Button>
+            </Authenticated>
           </div>
 
           {/* Trust & Safety Banner */}
@@ -531,6 +565,54 @@ export default function ProductDetailPage() {
           </div>
         )}
       </div>
+
+      {/* Request a quote dialog */}
+      <Dialog open={rfqOpen} onOpenChange={setRfqOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Request a quote</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2">
+            <p className="text-xs text-muted-foreground">
+              Ask {(product as any).seller?.name ?? "the seller"} for a custom or bulk price on {product.name}.
+            </p>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Quantity</label>
+                <input
+                  type="number"
+                  min={1}
+                  value={rfqQty}
+                  onChange={(e) => setRfqQty(Math.max(1, Number(e.target.value)))}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium">Target price/unit (optional)</label>
+                <input
+                  type="number"
+                  placeholder="GHS"
+                  value={rfqTarget}
+                  onChange={(e) => setRfqTarget(e.target.value)}
+                  className="h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                />
+              </div>
+            </div>
+            <Textarea
+              placeholder="Add details — delivery location, timeline, custom requirements..."
+              value={rfqMessage}
+              onChange={(e) => setRfqMessage(e.target.value)}
+              rows={3}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setRfqOpen(false)} disabled={submittingRfq}>Cancel</Button>
+            <Button onClick={handleSubmitRfq} disabled={submittingRfq} className="gap-2">
+              {submittingRfq && <Loader2 className="size-4 animate-spin" />} Send request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Message seller dialog */}
       <Dialog open={messageOpen} onOpenChange={setMessageOpen}>

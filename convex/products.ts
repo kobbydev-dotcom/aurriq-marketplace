@@ -420,6 +420,16 @@ export const updateProduct = mutation({
     };
 
     await ctx.db.patch(args.productId, patch as any);
+
+    // If the product was restocked from zero, notify users who wishlisted it.
+    const wasOut = (product.stockQuantity ?? 0) === 0;
+    const nowIn = nextStock > 0;
+    if (wasOut && nowIn) {
+      await ctx.scheduler.runAfter(0, internal.inventory.setStock, {
+        productId: args.productId,
+        stockQuantity: nextStock,
+      });
+    }
     return args.productId;
   },
 });

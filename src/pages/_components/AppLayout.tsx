@@ -1,5 +1,5 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { ShoppingBag, ShoppingCart, MessageSquare, ClipboardList, LayoutDashboard, LogOut } from "lucide-react";
+import { ShoppingBag, ShoppingCart, MessageSquare, ClipboardList, LayoutDashboard, LogOut, Heart } from "lucide-react";
 import { Authenticated, Unauthenticated } from "convex/react";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { useAuth } from "@/hooks/use-auth.ts";
@@ -12,6 +12,7 @@ const navLinks = [
   { path: "/cart", label: "Cart", icon: <ShoppingCart className="size-4" /> },
   { path: "/orders", label: "Orders", icon: <ClipboardList className="size-4" /> },
   { path: "/messages", label: "Messages", icon: <MessageSquare className="size-4" /> },
+  { path: "/wishlist", label: "Wishlist", icon: <Heart className="size-4" /> },
   { path: "/seller/dashboard", label: "My Shop", icon: <LayoutDashboard className="size-4" /> },
   { path: "/buyer/dashboard", label: "Buyer Dashboard", icon: <ShoppingCart className="size-4" /> }, // New buyer dashboard link
 ];

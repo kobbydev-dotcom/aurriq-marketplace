@@ -89,6 +89,34 @@ export const getFollowCounts = query({
   },
 });
 
+// Sellers the current user follows ("Saved suppliers"), with details.
+export const getSavedSuppliers = query({
+  args: {},
+  handler: async (ctx) => {
+    const me = await getCurrentUser(ctx);
+    if (!me) return [];
+    const follows = await ctx.db
+      .query("follows")
+      .withIndex("by_follower", (q) => q.eq("followerId", me._id))
+      .order("desc")
+      .collect();
+    const result: any[] = [];
+    for (const f of follows) {
+      const seller: any = await ctx.db.get(f.followeeId);
+      if (!seller) continue;
+      result.push({
+        _id: seller._id,
+        name: seller.name,
+        image: seller.image ?? seller.avatar,
+        businessType: seller.businessType,
+        isVerified: seller.isVerified,
+        locationLabel: seller.locationShared ? seller.locationLabel : undefined,
+      });
+    }
+    return result;
+  },
+});
+
 // Products from sellers the current user follows (their "Following" feed).
 export const getFollowedProducts = query({
   args: {},

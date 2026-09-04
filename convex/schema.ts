@@ -157,7 +157,23 @@ export default defineSchema({
     productId: v.id("products"),
   })
     .index("by_user", ["userId"])
-    .index("by_user_and_product", ["userId", "productId"]),
+    .index("by_user_and_product", ["userId", "productId"])
+    .index("by_product", ["productId"]),
+
+  // Requests for Quotation (RFQ) — buyers ask sellers for a quote on bulk/custom orders.
+  rfqs: defineTable({
+    buyerId: v.id("users"),
+    sellerId: v.id("users"),
+    productId: v.optional(v.id("products")),
+    quantity: v.number(),
+    targetPrice: v.optional(v.number()),
+    message: v.optional(v.string()),
+    status: v.string(), // "open" | "quoted" | "accepted" | "declined"
+    quotedPrice: v.optional(v.number()),
+    sellerNote: v.optional(v.string()),
+  })
+    .index("by_buyer", ["buyerId"])
+    .index("by_seller", ["sellerId"]),
 
   reports: defineTable({
     reporterId: v.id("users"),

@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   Plus, Package, TrendingUp, AlertTriangle, ShoppingBag,
   MoreVertical, Pencil, Trash2, ToggleLeft, ToggleRight, Tag, MessageSquare, ArrowLeft,
-  Clock, CheckCircle, Truck, PackageCheck, XCircle, Store, CreditCard, Smartphone, ShieldCheck, Loader2
+  Clock, CheckCircle, Truck, PackageCheck, XCircle, Store, CreditCard, Smartphone, ShieldCheck, Loader2, FileText
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
@@ -38,6 +38,7 @@ import ProductFormDialog from "@/pages/seller/dashboard/_components/ProductFormD
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel.d.ts";
 import SellerMessagesTab from "@/pages/seller/dashboard/_components/SellerMessagesTab.tsx";
 import AnalyticsTab from "@/pages/seller/dashboard/_components/AnalyticsTab.tsx";
+import SellerRfqsTab from "@/pages/seller/dashboard/_components/SellerRfqsTab.tsx";
 import {
   Select,
   SelectContent,
@@ -684,6 +685,9 @@ export default function SellerDashboardInner() {
           <TabsTrigger value="orders" className="gap-2 cursor-pointer">
             <ShoppingBag className="size-3.5" /> Orders
           </TabsTrigger>
+          <TabsTrigger value="rfqs" className="gap-2 cursor-pointer">
+            <FileText className="size-3.5" /> RFQs
+          </TabsTrigger>
           <TabsTrigger value="messages" className="gap-2 cursor-pointer">
             <MessageSquare className="size-3.5" /> Messages
             {(unreadMessages ?? 0) > 0 && (
@@ -789,6 +793,10 @@ export default function SellerDashboardInner() {
         {/* ── Orders Tab ── */}
         <TabsContent value="orders">
           <SellerOrdersTab onContactBuyer={(buyerId) => { setSelectedBuyerId(buyerId); setActiveTab("messages"); }} />
+        </TabsContent>
+
+        <TabsContent value="rfqs">
+          <SellerRfqsTab />
         </TabsContent>
 
         <TabsContent value="messages">

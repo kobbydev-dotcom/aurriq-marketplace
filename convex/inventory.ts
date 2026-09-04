@@ -4,6 +4,42 @@ import { internal } from "./_generated/api";
 import type { Id, Doc } from "./_generated/dataModel.d.ts";
 
 /**
+ * Internal: set a product's stock directly. When stock goes from 0 to >0,
+ * notify everyone who wishlisted it that it's back in stock.
+ */
+export const setStock = internalMutation({
+  args: { productId: v.id("products"), stockQuantity: v.number() },
+  handler: async (ctx, args) => {
+    const product: any = await ctx.db.get(args.productId);
+    if (!product) return;
+    const wasOut = (product.stockQuantity ?? 0) === 0;
+    const nowIn = args.stockQuantity > 0;
+
+    await ctx.db.patch(args.productId, {
+      stockQuantity: args.stockQuantity,
+      outOfStockAlertSent: nowIn ? false : product.outOfStockAlertSent,
+      lowStockAlertSent: args.stockQuantity > (product.lowStockThreshold ?? 0) ? false : product.lowStockAlertSent,
+    });
+
+    if (wasOut && nowIn) {
+      const wishers = await ctx.db
+        .query("wishlist")
+        .withIndex("by_product", (q) => q.eq("productId", args.productId))
+        .collect();
+      for (const w of wishers) {
+        await ctx.runMutation(internal.notifications.createNotification, {
+          userId: w.userId,
+          type: "back_in_stock",
+          title: "Back in stock",
+          body: `"${product.name}" you saved is available again.`,
+          link: `/product/${args.productId}`,
+        });
+      }
+    }
+  },
+});
+
+/**
  * Called after an order is placed to decrement stock and update revenue.
  * Also triggers SMS alerts if thresholds are crossed.
  */

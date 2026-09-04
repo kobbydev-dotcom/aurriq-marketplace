@@ -2,7 +2,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api.js";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { Link } from "react-router-dom";
-import { Package, ArrowLeft, Clock, CheckCircle, Truck, XCircle, PackageCheck } from "lucide-react";
+import { Package, ArrowLeft, Clock, CheckCircle, Truck, XCircle, PackageCheck, Check } from "lucide-react";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { SignInButton } from "@/components/ui/signin.tsx";
@@ -21,6 +21,35 @@ const STATUS_CONFIG = {
 } as const;
 
 type OrderStatus = keyof typeof STATUS_CONFIG;
+
+// Visual order-tracking stepper (real-time — updates as the seller advances status).
+const TRACK_STEPS = ["pending", "confirmed", "shipped", "delivered"] as const;
+function OrderTracker({ status }: { status: OrderStatus }) {
+  if (status === "cancelled" || status === "awaiting_payment") return null;
+  const currentIdx = TRACK_STEPS.indexOf(status as (typeof TRACK_STEPS)[number]);
+  const icons = [Clock, CheckCircle, Truck, PackageCheck];
+  return (
+    <div className="flex items-center gap-0 pt-1">
+      {TRACK_STEPS.map((step, i) => {
+        const Icon = icons[i];
+        const reached = i <= currentIdx;
+        return (
+          <div key={step} className="flex items-center flex-1 last:flex-none">
+            <div className="flex flex-col items-center">
+              <div className={`size-7 rounded-full flex items-center justify-center border ${reached ? "bg-primary text-primary-foreground border-primary" : "border-border text-muted-foreground/40"}`}>
+                {reached ? <Check className="size-3.5" /> : <Icon className="size-3.5" />}
+              </div>
+              <span className={`text-[9px] mt-1 capitalize ${reached ? "text-foreground" : "text-muted-foreground/50"}`}>{step}</span>
+            </div>
+            {i < TRACK_STEPS.length - 1 && (
+              <div className={`h-px flex-1 mx-1 mb-4 ${i < currentIdx ? "bg-primary" : "bg-border"}`} />
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 function OrderCard({
   order,
@@ -107,6 +136,8 @@ function OrderCard({
           Note: {order.buyerNote}
         </p>
       )}
+
+      <OrderTracker status={order.status} />
     </div>
   );
 }

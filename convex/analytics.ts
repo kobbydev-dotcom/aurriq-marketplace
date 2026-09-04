@@ -310,3 +310,28 @@ export const getBuyerAnalytics = query({
     };
   },
 });
+
+// Frequently purchased products for the current buyer (reorder nudges).
+export const getMyFrequentlyPurchased = query({
+  args: {},
+  handler: async (ctx) => {
+    const me = await getCurrentUser(ctx);
+    if (!me) return [];
+    const orders = await ctx.db
+      .query("orders")
+      .withIndex("by_buyer", (q) => q.eq("buyerId", me._id))
+      .collect();
+    const counts = new Map<string, number>();
+    for (const o of orders) {
+      if (o.status === "cancelled") continue;
+      counts.set(String(o.productId), (counts.get(String(o.productId)) ?? 0) + (o.quantity ?? 1));
+    }
+    const entries = Array.from(counts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    const result: any[] = [];
+    for (const [productId, timesBought] of entries) {
+      const product: any = await ctx.db.get(productId as any);
+      if (product && product.isActive) result.push({ ...product, timesBought });
+    }
+    return result;
+  },
+});

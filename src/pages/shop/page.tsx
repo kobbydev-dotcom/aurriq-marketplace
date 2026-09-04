@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api.js";
 import { useSearchParams, Link } from "react-router-dom";
-import { Search, Package, MapPin, Loader2, Navigation, Store, Map as MapIcon, List, Heart } from "lucide-react";
+import { Search, Package, MapPin, Loader2, Navigation, Store, Map as MapIcon, List, Heart, History, X } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, Circle } from "react-leaflet";
 import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
@@ -233,6 +233,29 @@ export default function ShopPage() {
 
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch] = useDebounce(searchInput, 350);
+  const [searchFocused, setSearchFocused] = useState(false);
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem("aurriq_recent_searches") ?? "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const saveSearch = (term: string) => {
+    const t = term.trim();
+    if (!t) return;
+    setRecentSearches((prev) => {
+      const next = [t, ...prev.filter((s) => s.toLowerCase() !== t.toLowerCase())].slice(0, 6);
+      localStorage.setItem("aurriq_recent_searches", JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const clearRecent = () => {
+    localStorage.removeItem("aurriq_recent_searches");
+    setRecentSearches([]);
+  };
 
   // Shared buyer location (used by the Near You map + the product distance filter)
   const [buyerCoords, setBuyerCoords] = useState<Coords | null>(null);
@@ -306,7 +329,29 @@ export default function ShopPage() {
             placeholder="Search products, brands..."
             value={searchInput}
             onChange={(e) => setSearchInput(e.target.value)}
+            onFocus={() => setSearchFocused(true)}
+            onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") saveSearch(searchInput);
+            }}
           />
+          {searchFocused && recentSearches.length > 0 && !searchInput && (
+            <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-border bg-popover shadow-lg z-50 overflow-hidden">
+              <div className="flex items-center justify-between px-3 py-2 border-b border-border/50">
+                <span className="text-[10px] uppercase tracking-wider text-muted-foreground flex items-center gap-1"><History className="size-3" /> Recent searches</span>
+                <button onClick={clearRecent} className="text-muted-foreground hover:text-foreground cursor-pointer" aria-label="Clear recent searches"><X className="size-3" /></button>
+              </div>
+              {recentSearches.map((term) => (
+                <button
+                  key={term}
+                  onMouseDown={() => { setSearchInput(term); saveSearch(term); }}
+                  className="w-full text-left px-3 py-2 text-sm hover:bg-muted/60 transition-colors cursor-pointer flex items-center gap-2"
+                >
+                  <History className="size-3 text-muted-foreground" /> {term}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
         <div className="flex flex-wrap gap-2">
           {CATEGORIES.map((c) => (

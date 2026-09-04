@@ -29,6 +29,8 @@ function BuyerDashboardContent() {
   const cartItems = useQuery(api.cart.getCartItems, {});
   const inbox = useQuery(api.messages.getInbox, {});
   const buyerAnalytics = useQuery((api.analytics as any).getBuyerAnalytics, {}) as any;
+  const frequent = useQuery((api.analytics as any).getMyFrequentlyPurchased, {}) as any[] | undefined;
+  const savedSuppliers = useQuery((api.follows as any).getSavedSuppliers, {}) as any[] | undefined;
 
   if (user === undefined || orders === undefined || cartItems === undefined || inbox === undefined) {
     return <DashboardLoading />;
@@ -167,6 +169,55 @@ function BuyerDashboardContent() {
               </div>
             </div>
           )}
+        </section>
+      )}
+
+      {/* Saved suppliers */}
+      {savedSuppliers && savedSuppliers.length > 0 && (
+        <section>
+          <h2 className="text-xl font-medium mb-1" style={{ fontFamily: "'Cormorant Garamond', serif" }}>Saved suppliers</h2>
+          <p className="text-sm text-muted-foreground mb-4">Sellers you follow — jump straight to their storefront.</p>
+          <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4">
+            {savedSuppliers.map((s: any) => (
+              <Link key={s._id} to={`/shop?sellerId=${s._id}`} className="group shrink-0 w-40 rounded-xl border border-border bg-card p-4 hover:border-primary/50 transition-colors">
+                <div className="size-12 rounded-full bg-muted overflow-hidden flex items-center justify-center border border-border mb-2">
+                  {s.image ? <img src={s.image} alt={s.name} className="w-full h-full object-cover" referrerPolicy="no-referrer" /> : <UserRound className="size-5 text-muted-foreground" />}
+                </div>
+                <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{s.name}</p>
+                {s.businessType && <p className="text-[10px] text-primary capitalize">{s.businessType.replace(/_/g, " ")}</p>}
+                {s.locationLabel && <p className="text-[10px] text-muted-foreground truncate mt-0.5">{s.locationLabel}</p>}
+              </Link>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Frequently purchased — reorder nudges */}
+      {frequent && frequent.length > 0 && (
+        <section>
+          <h2 className="text-xl font-medium mb-1" style={{ fontFamily: "'Cormorant Garamond', serif" }}>Buy again</h2>
+          <p className="text-sm text-muted-foreground mb-4">Your go-to items — reorder in one tap.</p>
+          <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4">
+            {frequent.map((p: any) => (
+              <Link key={p._id} to={`/product/${p._id}`} className="group shrink-0 w-36">
+                <div className="aspect-square rounded-xl overflow-hidden bg-muted border border-border mb-2 relative">
+                  {p.images?.[0] ? (
+                    <img src={p.images[0]} alt={p.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center"><Package className="size-7 text-muted-foreground/30" /></div>
+                  )}
+                  {p.stockQuantity === 0 && (
+                    <div className="absolute inset-0 bg-background/70 flex items-center justify-center"><span className="text-[10px] text-muted-foreground">Out of stock</span></div>
+                  )}
+                </div>
+                <p className="truncate text-xs font-medium group-hover:text-primary transition-colors">{p.name}</p>
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-bold text-primary">{formatCurrency(p.promoPrice ?? p.originalPrice)}</p>
+                  <span className="text-[9px] text-muted-foreground">bought {p.timesBought}×</span>
+                </div>
+              </Link>
+            ))}
+          </div>
         </section>
       )}
     </div>
