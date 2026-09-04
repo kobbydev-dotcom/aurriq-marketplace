@@ -127,21 +127,44 @@ export const storeUser = mutation({
       throw new Error("Called storeUser without authentication");
     }
 
-    // Using tokenIdentifier as it is the standard for Convex Auth indexes
-    const user = await ctx.db
+    const identityEmail = typeof (identity as any).email === "string"
+      ? String((identity as any).email).trim().toLowerCase()
+      : undefined;
+
+    // Prefer the auth token, but fall back to email so a login round-trip or
+    // provider change cannot create a second anonymous marketplace profile.
+    let user = await ctx.db
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
 
     if (user !== null) {
+      const patch: Record<string, unknown> = {};
+      if (!user.email && identityEmail) patch.email = identityEmail;
+      if (!user.tokenIdentifier || user.tokenIdentifier !== identity.tokenIdentifier) {
+        patch.tokenIdentifier = identity.tokenIdentifier;
+      }
+      if (Object.keys(patch).length > 0) await ctx.db.patch(user._id, patch as any);
       return user._id;
     }
 
-    const name = identity.name ?? "Anonymous Buyer";
+    if (identityEmail) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("email", (q) => q.eq("email", identityEmail))
+        .unique();
+      if (user) {
+        await ctx.db.patch(user._id, { tokenIdentifier: identity.tokenIdentifier });
+        return user._id;
+      }
+    }
+
+    const name = identity.name ?? identityEmail?.split("@")[0] ?? "Anonymous Buyer";
     const imageUrl = identity.picture || (identity as any).pictureUrl || undefined;
 
     return await ctx.db.insert("users", {
       tokenIdentifier: identity.tokenIdentifier!,
+      email: identityEmail,
       name,
       image: imageUrl,
       isSeller: false,
@@ -196,6 +219,7 @@ export const updateProfile = mutation({
     if (!user) {
       const userId = await ctx.db.insert("users", {
         tokenIdentifier: identity.tokenIdentifier!,
+        email: typeof (identity as any).email === "string" ? String((identity as any).email).trim().toLowerCase() : undefined,
         name: (args.name?.trim() || identity.name || "New User").trim(),
         // Cast to string or undefined explicitly to satisfy TypeScript
         image: typeof identity.picture === 'string' ? identity.picture : undefined,

@@ -16,7 +16,26 @@ function MarketplaceUserSync() {
 
   useEffect(() => {
     if (!isAuthenticated) return;
-    void storeUser().catch(() => undefined);
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+
+    const sync = async (attempt = 0) => {
+      try {
+        await storeUser();
+      } catch (error) {
+        if (cancelled || attempt >= 2) {
+          console.error("Aurriq account synchronization failed", error);
+          return;
+        }
+        timer = setTimeout(() => void sync(attempt + 1), 750 * (attempt + 1));
+      }
+    };
+
+    void sync();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, [isAuthenticated, storeUser]);
 
   return null;
