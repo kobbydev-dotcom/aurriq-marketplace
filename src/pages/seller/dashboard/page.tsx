@@ -1,10 +1,16 @@
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
+import { useSearchParams } from "react-router-dom";
+import { useState } from "react";
 import { SignInButton } from "@/components/ui/signin.tsx";
+import { AuthModal } from "@/components/auth/AuthModal.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { LayoutDashboard } from "lucide-react";
 import SellerDashboardInner from "./_components/SellerDashboardInner.tsx";
 
 export default function SellerDashboard() {
+  const [searchParams] = useSearchParams();
+  const [loginOpen, setLoginOpen] = useState(true);
+  const hasPaymentReturn = Boolean(searchParams.get("reference") || searchParams.get("subscription"));
   // Check if our SSO Bridge has successfully established an identity
   const isSsoAuthenticated = localStorage.getItem("marketplace_seller_id") !== null;
 
@@ -31,10 +37,19 @@ export default function SellerDashboard() {
             <h2 className="text-2xl font-light" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
               Seller Dashboard
             </h2>
-            <p className="text-muted-foreground text-sm max-w-xs mb-2">
-              Sign in to manage your products, track inventory, and monitor your sales.
+            <p className="text-muted-foreground text-sm max-w-sm mb-2">
+              {hasPaymentReturn
+                ? "Your payment was received. Sign in once to finish activating your vendor dashboard."
+                : "Sign in to manage your products, track inventory, and monitor your sales."}
             </p>
-            <SignInButton />
+            {hasPaymentReturn ? (
+              <>
+                <button type="button" className="text-primary text-sm font-medium hover:underline" onClick={() => setLoginOpen(true)}>
+                  Continue to vendor dashboard
+                </button>
+                <AuthModal open={loginOpen} onOpenChange={setLoginOpen} />
+              </>
+            ) : <SignInButton />}
           </div>
         </Unauthenticated>
       )}

@@ -559,8 +559,14 @@ export default function SellerDashboardInner() {
     if (currentUser?.role === "seller") {
       setRecoveringPayment(false);
       localStorage.removeItem("aurriq_pending_vendor_payment");
+      if (searchParams.has("reference") || searchParams.has("subscription")) {
+        searchParams.delete("subscription");
+        searchParams.delete("reference");
+        searchParams.delete("trxref");
+        setSearchParams(searchParams, { replace: true });
+      }
     }
-  }, [currentUser?.role]);
+  }, [currentUser?.role, searchParams, setSearchParams]);
 
   useEffect(() => {
     const reference = searchParams.get("reference")
@@ -580,11 +586,7 @@ export default function SellerDashboardInner() {
         setRecoveringPayment(false);
         toast.error(error instanceof Error ? error.message : "Unable to verify payment");
       })
-      .finally(() => {
-        searchParams.delete("subscription");
-        searchParams.delete("reference");
-        setSearchParams(searchParams, { replace: true });
-      });
+      .finally(() => undefined);
   }, [currentUser, searchParams, setSearchParams, recoverMarketplaceSubscription]);
 
   const handleEdit = (p: Doc<"products">) => {
