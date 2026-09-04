@@ -107,12 +107,10 @@ export default function Index() {
             </Button>
 
             <Unauthenticated>
-              <div
-                className="rounded-full px-8 text-[11px] tracking-[0.15em] font-normal border-0 cursor-pointer flex items-center justify-center"
+              <SignInButton
+                className="rounded-full px-8 text-[11px] tracking-[0.15em] font-normal border-0"
                 style={{ background: "#D4AF37", color: "#0A0800", height: "50px" }}
-              >
-                <SignInButton />
-              </div>
+              />
             </Unauthenticated>
 
             <Button
@@ -337,12 +335,10 @@ export default function Index() {
               Join Aurriq to start selling your beauty products.
             </p>
             <Unauthenticated>
-              <div
-                className="rounded-full px-5 text-[11px] tracking-[0.12em] font-semibold border-0 w-fit cursor-pointer flex items-center justify-center"
-                style={{ background: "#D4AF37", color: "#0A0800", height: "30px" }}
-              >
-                <SignInButton />
-              </div>
+              <SignInButton
+                className="rounded-full px-5 text-[11px] tracking-[0.12em] font-semibold border-0 w-fit"
+                style={{ background: "#D4AF37", color: "#0A0800", height: "44px" }}
+              />
             </Unauthenticated>
           </motion.div>
         </div>

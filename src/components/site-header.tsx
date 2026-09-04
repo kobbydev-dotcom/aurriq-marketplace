@@ -93,9 +93,10 @@ export default function SiteHeader() {
           </Link>
 
           <Unauthenticated>
-            <div className="hidden md:flex rounded-full text-[11px] font-semibold border-0 flex-shrink-0 overflow-hidden" style={{ background: "#C9930A", color: "#0A0600", height: "36px", paddingLeft: "20px", paddingRight: "20px", letterSpacing: "0.08em", alignItems: "center", justifyContent: "center", cursor: "pointer" }}>
-              <SignInButton />
-            </div>
+            <SignInButton
+              className="hidden md:flex rounded-full text-[11px] font-semibold border-0 flex-shrink-0"
+              style={{ background: "#C9930A", color: "#0A0600", height: "36px", paddingLeft: "20px", paddingRight: "20px", letterSpacing: "0.08em" }}
+            />
           </Unauthenticated>
 
           <Authenticated>
