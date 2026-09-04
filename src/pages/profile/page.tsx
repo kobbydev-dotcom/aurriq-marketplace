@@ -48,6 +48,12 @@ export default function ProfilePage() {
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
+  useEffect(() => {
+    if (sessionStorage.getItem("aurriq_profile_saved") !== "true") return;
+    sessionStorage.removeItem("aurriq_profile_saved");
+    toast.success("Profile updated successfully!");
+  }, []);
+
   // Sync fields from Convex when the user loads
   useEffect(() => {
     if (user) {
@@ -114,7 +120,8 @@ export default function ProfilePage() {
         locationShared,
         doabookproSlug: doabookproSlug.trim() || undefined,
       });
-      toast.success("Profile updated successfully!");
+      sessionStorage.setItem("aurriq_profile_saved", "true");
+      window.location.reload();
     } catch (error) {
       toast.error("Failed to update profile");
       console.error(error);
