@@ -31,6 +31,11 @@ function identityDisplayName(identity: any, email: string | undefined) {
   return humanizeEmailLocalPart(email);
 }
 
+function stableAuthSubject(identity: any) {
+  const subject = typeof identity?.subject === "string" ? identity.subject.trim() : "";
+  return subject.split("|")[0] || undefined;
+}
+
 function isAnonymousPlaceholder(name: string | null | undefined) {
   return !name || /^(anonymous buyer|anonymous|new user|user)$/i.test(name.trim());
 }
@@ -157,9 +162,7 @@ export const storeUser = mutation({
     const identityEmail = typeof (identity as any).email === "string"
       ? String((identity as any).email).trim().toLowerCase()
       : undefined;
-    const authSubject = typeof (identity as any).subject === "string"
-      ? String((identity as any).subject).trim()
-      : undefined;
+    const authSubject = stableAuthSubject(identity);
     const providerName = identityDisplayName(identity, identityEmail);
     const providerImage = identity.picture || (identity as any).pictureUrl || undefined;
 
@@ -171,6 +174,18 @@ export const storeUser = mutation({
         .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
         .unique()
       : null;
+
+    if (user === null) {
+      const legacySubject = typeof (identity as any).subject === "string"
+        ? String((identity as any).subject).trim()
+        : "";
+      if (legacySubject && authSubject) {
+        const candidates = await ctx.db.query("users").collect();
+        user = candidates.find((candidate: any) =>
+          candidate.authSubject === legacySubject || candidate.authSubject?.startsWith(`${authSubject}|`)
+        ) ?? null;
+      }
+    }
 
     if (user === null) {
       user = await ctx.db
@@ -230,15 +245,22 @@ export const current = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
-    const authSubject = typeof (identity as any).subject === "string"
-      ? String((identity as any).subject).trim()
-      : undefined;
+    const authSubject = stableAuthSubject(identity);
     if (authSubject) {
       const user = await ctx.db
         .query("users")
         .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
         .unique();
       if (user) return user;
+
+      const legacySubject = typeof (identity as any).subject === "string"
+        ? String((identity as any).subject).trim()
+        : "";
+      const candidates = await ctx.db.query("users").collect();
+      const legacyUser = candidates.find((candidate: any) =>
+        candidate.authSubject === legacySubject || candidate.authSubject?.startsWith(`${authSubject}|`)
+      );
+      if (legacyUser) return legacyUser;
     }
 
     return await ctx.db
