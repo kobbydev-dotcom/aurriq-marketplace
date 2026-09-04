@@ -199,6 +199,8 @@ export const createProduct = mutation({
     videos: v.optional(v.array(v.string())),
     tags: v.array(v.string()),
     paymentOptions: v.optional(v.object({ mode: v.string(), percent: v.optional(v.number()) })),
+    wholesalePrice: v.optional(v.number()),
+    wholesaleMinQty: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -247,6 +249,8 @@ export const createProduct = mutation({
       sellerLongitude: (user as any).longitude,
       sellerLocationLabel: (user as any).locationLabel,
       sellerLocationShared: (user as any).locationShared ?? false,
+      wholesalePrice: args.wholesalePrice,
+      wholesaleMinQty: args.wholesaleMinQty,
 
       // Hardcoded tracking parameters required by schema initialization:
       sellerId: user._id,
@@ -361,6 +365,8 @@ export const updateProduct = mutation({
     videos: v.optional(v.array(v.string())),
     tags: v.optional(v.array(v.string())),
     paymentOptions: v.optional(v.object({ mode: v.string(), percent: v.optional(v.number()) })),
+    wholesalePrice: v.optional(v.number()),
+    wholesaleMinQty: v.optional(v.number()),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -406,6 +412,8 @@ export const updateProduct = mutation({
       sellerLongitude: (user as any).longitude,
       sellerLocationLabel: (user as any).locationLabel,
       sellerLocationShared: (user as any).locationShared ?? false,
+      wholesalePrice: args.wholesalePrice !== undefined ? args.wholesalePrice : (product as any).wholesalePrice,
+      wholesaleMinQty: args.wholesaleMinQty !== undefined ? args.wholesaleMinQty : (product as any).wholesaleMinQty,
       isActive: typeof args.isActive === "boolean" ? args.isActive : product.isActive,
       lowStockAlertSent: nextStock > nextThreshold ? false : product.lowStockAlertSent,
       outOfStockAlertSent: nextStock > 0 ? false : product.outOfStockAlertSent,

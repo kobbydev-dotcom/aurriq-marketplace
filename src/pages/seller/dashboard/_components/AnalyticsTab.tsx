@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.t
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
-  Eye, Store, ShoppingBag, TrendingUp, Users, DollarSign, Percent, Package, BarChart3,
+  Eye, Store, ShoppingBag, TrendingUp, Users, DollarSign, Percent, Package, BarChart3, Sparkles,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils.ts";
 import { Link } from "react-router-dom";
@@ -12,6 +12,7 @@ import { Link } from "react-router-dom";
 export default function AnalyticsTab() {
   const analytics = useQuery((api.analytics as any).getSellerAnalytics, {}) as any;
   const topProducts = useQuery((api.analytics as any).getTopProducts, {}) as any[] | undefined;
+  const insights = useQuery((api.analytics as any).getSellerInsights, {}) as any;
 
   if (analytics === undefined || topProducts === undefined) {
     return (
@@ -43,6 +44,29 @@ export default function AnalyticsTab() {
 
   return (
     <div className="space-y-6">
+      {/* AI insights */}
+      <Card className="border-primary/30 bg-primary/5">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <Sparkles className="size-4 text-primary" /> AI Insights
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {!insights ? (
+            <Skeleton className="h-16 w-full" />
+          ) : (
+            <ul className="space-y-2">
+              {insights.insights.map((tip: string, i: number) => (
+                <li key={i} className="flex gap-2 text-sm text-foreground/90">
+                  <Sparkles className="size-3.5 text-primary shrink-0 mt-0.5" />
+                  <span>{tip}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </CardContent>
+      </Card>
+
       {/* KPI grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {stats.map((s) => (

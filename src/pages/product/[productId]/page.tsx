@@ -2,7 +2,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api.js";
 import { useState, useEffect, useRef } from "react";
-import { ShoppingCart, MessageCircle, Phone, ArrowLeft, Package, ChevronLeft, ChevronRight, Loader2, Plus, Minus, Flag, Video, Eye } from "lucide-react";
+import { ShoppingCart, MessageCircle, Phone, ArrowLeft, Package, ChevronLeft, ChevronRight, Loader2, Plus, Minus, Flag, Video, Eye, Heart, Star } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -47,6 +47,52 @@ export default function ProductDetailPage() {
   const [sending, setSending] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
   const trackedRef = useRef(false);
+
+  // Wishlist + reviews
+  const isWishlisted = useQuery(
+    (api.wishlist as any).isWishlisted,
+    productId ? { productId: productId as Id<"products"> } : "skip"
+  ) as boolean | undefined;
+  const toggleWishlist = useMutation((api.wishlist as any).toggleWishlist);
+  const reviews = useQuery(
+    (api.reviews as any).getProductReviews,
+    productId ? { productId: productId as Id<"products"> } : "skip"
+  ) as any[] | undefined;
+  const myReview = useQuery(
+    (api.reviews as any).getMyReview,
+    productId ? { productId: productId as Id<"products"> } : "skip"
+  ) as any;
+  const addReview = useMutation((api.reviews as any).addReview);
+  const [myRating, setMyRating] = useState(0);
+  const [myComment, setMyComment] = useState("");
+  const [savingReview, setSavingReview] = useState(false);
+
+  const ratingAvg = (product as any)?.ratingAvg as number | undefined;
+  const ratingCount = (product as any)?.ratingCount as number | undefined;
+
+  const handleWishlist = async () => {
+    if (!productId) return;
+    try {
+      const res = await toggleWishlist({ productId: productId as Id<"products"> });
+      toast.success(res.wishlisted ? "Added to your wishlist" : "Removed from wishlist");
+    } catch {
+      toast.error("Sign in to save items");
+    }
+  };
+
+  const handleSubmitReview = async () => {
+    if (!productId || myRating === 0) return;
+    setSavingReview(true);
+    try {
+      await addReview({ productId: productId as Id<"products">, rating: myRating, comment: myComment.trim() || undefined });
+      toast.success("Thanks for your review!");
+      setMyComment("");
+    } catch {
+      toast.error("Couldn't save your review");
+    } finally {
+      setSavingReview(false);
+    }
+  };
 
   // Track the product view + seller shop view once per mount.
   useEffect(() => {
@@ -165,6 +211,13 @@ export default function ProductDetailPage() {
   const videos = (product as any).videos as string[] | undefined;
   const isOutOfStock = product.stockQuantity === 0;
 
+  // Wholesale / bulk pricing
+  const wholesalePrice = (product as any).wholesalePrice as number | undefined;
+  const wholesaleMinQty = (product as any).wholesaleMinQty as number | undefined;
+  const wholesaleActive = wholesalePrice != null && wholesaleMinQty != null;
+  const unitPrice = wholesaleActive && qty >= (wholesaleMinQty ?? Infinity) ? wholesalePrice! : activePrice;
+  const wholesaleSavings = wholesaleActive ? Math.round(((activePrice - wholesalePrice!) / activePrice) * 100) : 0;
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
       {/* Breadcrumb */}
@@ -256,14 +309,33 @@ export default function ProductDetailPage() {
                   <Eye className="size-3" /> {viewCount} view{viewCount !== 1 ? "s" : ""}
                 </span>
               )}
+              {typeof ratingCount === "number" && ratingCount > 0 && (
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <Star className="size-3 fill-amber-400 text-amber-400" /> {ratingAvg} ({ratingCount})
+                </span>
+              )}
             </div>
           </div>
 
           {/* Price */}
-          <div className="flex items-end gap-3">
-            <span className="text-3xl font-bold text-primary">{formatCurrency(activePrice)}</span>
-            {product.promoPrice && (
-              <span className="text-lg text-muted-foreground line-through pb-0.5">{formatCurrency(product.originalPrice)}</span>
+          <div>
+            <div className="flex items-end gap-3">
+              <span className="text-3xl font-bold text-primary">{formatCurrency(unitPrice)}</span>
+              {(product.promoPrice || (wholesaleActive && unitPrice === wholesalePrice)) && (
+                <span className="text-lg text-muted-foreground line-through pb-0.5">{formatCurrency(product.originalPrice)}</span>
+              )}
+              {wholesaleActive && qty >= (wholesaleMinQty ?? Infinity) && (
+                <Badge className="text-[10px] bg-emerald-500/15 text-emerald-400 border-emerald-500/30 mb-1">Wholesale price</Badge>
+              )}
+            </div>
+            {wholesaleActive && (
+              <p className="text-xs text-muted-foreground mt-1">
+                {qty >= (wholesaleMinQty ?? Infinity) ? (
+                  <>You're getting the wholesale rate — save {wholesaleSavings}% per unit.</>
+                ) : (
+                  <>Buy {wholesaleMinQty}+ units and pay <span className="text-primary font-medium">{formatCurrency(wholesalePrice!)}</span> each (save {wholesaleSavings}%).</>
+                )}
+              </p>
             )}
           </div>
 
@@ -339,6 +411,14 @@ export default function ProductDetailPage() {
                 {addingToCart ? <Loader2 className="size-4 animate-spin" /> : <ShoppingCart className="size-4" />}
                 {isOutOfStock ? "Out of Stock" : "Add to Cart"}
               </Button>
+              <Button
+                variant="outline"
+                className="w-full gap-2"
+                onClick={handleWishlist}
+              >
+                <Heart className={`size-4 ${isWishlisted ? "fill-red-500 text-red-500" : ""}`} />
+                {isWishlisted ? "Saved to wishlist" : "Save to wishlist"}
+              </Button>
               <div className="grid grid-cols-2 gap-3">
                 <Button
                   variant="secondary"
@@ -381,6 +461,75 @@ export default function ProductDetailPage() {
             </div>
           </Authenticated>
         </div>
+      </div>
+
+      {/* Reviews */}
+      <div className="mt-12 border-t border-border/40 pt-8">
+        <div className="flex items-center justify-between mb-5">
+          <h2 className="text-xl font-light flex items-center gap-2" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
+            Reviews {typeof ratingCount === "number" && ratingCount > 0 && (
+              <span className="text-sm text-muted-foreground font-normal flex items-center gap-1">
+                <Star className="size-4 fill-amber-400 text-amber-400" /> {ratingAvg} · {ratingCount}
+              </span>
+            )}
+          </h2>
+        </div>
+
+        {/* Write a review */}
+        <Authenticated>
+          <div className="bg-card border border-border rounded-xl p-4 mb-6">
+            <p className="text-sm font-medium mb-2">{myReview ? "Update your review" : "Rate this product"}</p>
+            <div className="flex items-center gap-1 mb-3">
+              {[1, 2, 3, 4, 5].map((n) => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setMyRating(n)}
+                  className="cursor-pointer"
+                  aria-label={`${n} star${n !== 1 ? "s" : ""}`}
+                >
+                  <Star className={`size-5 ${n <= (myRating || myReview?.rating || 0) ? "fill-amber-400 text-amber-400" : "text-muted-foreground/40"}`} />
+                </button>
+              ))}
+            </div>
+            <Textarea
+              placeholder="Share your experience (optional)..."
+              value={myComment}
+              onChange={(e) => setMyComment(e.target.value)}
+              rows={2}
+            />
+            <Button
+              size="sm"
+              className="mt-3"
+              disabled={myRating === 0 || savingReview}
+              onClick={handleSubmitReview}
+            >
+              {savingReview && <Loader2 className="size-3.5 animate-spin mr-1.5" />}
+              {myReview ? "Update review" : "Submit review"}
+            </Button>
+          </div>
+        </Authenticated>
+
+        {/* Review list */}
+        {!reviews || reviews.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No reviews yet — be the first to share your experience.</p>
+        ) : (
+          <div className="space-y-4">
+            {reviews.map((r) => (
+              <div key={r._id} className="border-b border-border/40 pb-4">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-sm font-medium">{r.userName}</span>
+                  <span className="flex items-center gap-0.5">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <Star key={n} className={`size-3 ${n <= r.rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`} />
+                    ))}
+                  </span>
+                </div>
+                {r.comment && <p className="text-sm text-muted-foreground">{r.comment}</p>}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Message seller dialog */}

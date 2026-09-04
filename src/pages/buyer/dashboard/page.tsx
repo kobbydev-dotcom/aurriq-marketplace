@@ -1,6 +1,6 @@
 import { Authenticated, AuthLoading, Unauthenticated, useQuery } from "convex/react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ClipboardList, MessageSquare, Package, ShoppingBag, UserRound } from "lucide-react";
+import { ArrowRight, ClipboardList, MessageSquare, Package, ShoppingBag, UserRound, Eye, Heart, Users, Wallet } from "lucide-react";
 import { api } from "../../../../convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import { SignInButton } from "@/components/ui/signin.tsx";
@@ -28,6 +28,7 @@ function BuyerDashboardContent() {
   const orders = useQuery(api.orders.getMyOrders, {});
   const cartItems = useQuery(api.cart.getCartItems, {});
   const inbox = useQuery(api.messages.getInbox, {});
+  const buyerAnalytics = useQuery((api.analytics as any).getBuyerAnalytics, {}) as any;
 
   if (user === undefined || orders === undefined || cartItems === undefined || inbox === undefined) {
     return <DashboardLoading />;
@@ -114,6 +115,60 @@ function BuyerDashboardContent() {
           </div>
         )}
       </section>
+
+      {/* Activity & insights */}
+      {buyerAnalytics && (
+        <section className="space-y-5">
+          <div>
+            <h2 className="text-xl font-medium" style={{ fontFamily: "'Cormorant Garamond', serif" }}>Your activity</h2>
+            <p className="text-sm text-muted-foreground">A snapshot of how you shop on Aurriq.</p>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <div className="rounded-xl border border-border bg-card p-5">
+              <Wallet className="size-5 text-primary" />
+              <p className="mt-5 text-2xl font-semibold">{formatCurrency(buyerAnalytics.totalSpent)}</p>
+              <p className="text-sm text-muted-foreground">Total spent · {buyerAnalytics.itemsBought} items</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-5">
+              <Eye className="size-5 text-primary" />
+              <p className="mt-5 text-2xl font-semibold">{buyerAnalytics.productsViewed}</p>
+              <p className="text-sm text-muted-foreground">Products viewed</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-5">
+              <Heart className="size-5 text-primary" />
+              <p className="mt-5 text-2xl font-semibold">{buyerAnalytics.wishlistCount}</p>
+              <p className="text-sm text-muted-foreground">In your wishlist</p>
+            </div>
+            <div className="rounded-xl border border-border bg-card p-5">
+              <Users className="size-5 text-primary" />
+              <p className="mt-5 text-2xl font-semibold">{buyerAnalytics.followingCount}</p>
+              <p className="text-sm text-muted-foreground">Following</p>
+            </div>
+          </div>
+
+          {buyerAnalytics.recentlyViewed.length > 0 && (
+            <div>
+              <h3 className="text-sm font-medium mb-3">Recently viewed</h3>
+              <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4">
+                {buyerAnalytics.recentlyViewed.map((p: any) => (
+                  <Link key={p._id} to={`/product/${p._id}`} className="group shrink-0 w-36">
+                    <div className="aspect-square rounded-xl overflow-hidden bg-muted border border-border mb-2">
+                      {p.images?.[0] ? (
+                        <img src={p.images[0]} alt={p.name} className="h-full w-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center"><Package className="size-7 text-muted-foreground/30" /></div>
+                      )}
+                    </div>
+                    <p className="truncate text-xs font-medium group-hover:text-primary transition-colors">{p.name}</p>
+                    <p className="text-xs font-bold text-primary">{formatCurrency(p.promoPrice ?? p.originalPrice)}</p>
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 }

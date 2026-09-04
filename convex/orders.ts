@@ -72,7 +72,15 @@ export const placeOrder = mutation({
         });
       }
 
-      const priceAtPurchase = product.promoPrice ?? product.originalPrice;
+      const retailPrice = product.promoPrice ?? product.originalPrice;
+      // Wholesale: if the buyer's quantity meets the seller's wholesale minimum,
+      // charge the wholesale unit price.
+      const priceAtPurchase =
+        (product as any).wholesalePrice != null &&
+        (product as any).wholesaleMinQty != null &&
+        item.quantity >= (product as any).wholesaleMinQty
+          ? (product as any).wholesalePrice
+          : retailPrice;
       const totalAmount = (priceAtPurchase ?? 0) * item.quantity;
       total += totalAmount;
 

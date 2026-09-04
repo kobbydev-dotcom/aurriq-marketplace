@@ -72,6 +72,12 @@ export default defineSchema({
     sellerLongitude: v.optional(v.number()),
     sellerLocationLabel: v.optional(v.string()),
     sellerLocationShared: v.optional(v.boolean()),
+    // Wholesale / bulk pricing
+    wholesalePrice: v.optional(v.number()),
+    wholesaleMinQty: v.optional(v.number()),
+    // Denormalized rating for fast display.
+    ratingAvg: v.optional(v.number()),
+    ratingCount: v.optional(v.number()),
   }).index("by_seller", ["sellerId"]),
 
   messages: defineTable({
@@ -132,7 +138,26 @@ export default defineSchema({
   })
     .index("by_subject", ["subjectType", "subjectId"])
     .index("by_seller", ["sellerId"])
-    .index("by_product", ["productId"]),
+    .index("by_product", ["productId"])
+    .index("by_actor", ["actorId"]),
+
+  // Product reviews & ratings.
+  reviews: defineTable({
+    productId: v.id("products"),
+    userId: v.id("users"),
+    rating: v.number(),
+    comment: v.optional(v.string()),
+  })
+    .index("by_product", ["productId"])
+    .index("by_user_and_product", ["userId", "productId"]),
+
+  // Wishlist / favorites.
+  wishlist: defineTable({
+    userId: v.id("users"),
+    productId: v.id("products"),
+  })
+    .index("by_user", ["userId"])
+    .index("by_user_and_product", ["userId", "productId"]),
 
   reports: defineTable({
     reporterId: v.id("users"),

@@ -45,12 +45,23 @@ const schema = z
     category: z.string().min(1, "Select a category"),
     originalPrice: z.coerce.number().positive("Price must be greater than 0"),
     promoPrice: z.coerce.number().optional(),
+    offerWholesale: z.boolean().default(false),
+    wholesalePrice: z.coerce.number().positive().optional(),
+    wholesaleMinQty: z.coerce.number().int().min(2).optional(),
     stockQuantity: z.coerce.number().int().min(0, "Stock cannot be negative"),
     lowStockThreshold: z.coerce.number().int().min(1, "Set a minimum low-stock alert number"),
     paymentMode: z.enum(["momo", "cod", "negotiable", "partial"]).default("momo"),
     depositPercent: z.coerce.number().int().min(1).max(100).optional(),
     tags: z.string().optional(),
   })
+  .refine(
+    (data) => !data.offerWholesale || (data.wholesalePrice !== undefined && data.wholesalePrice > 0 && data.wholesalePrice < data.originalPrice),
+    { message: "Wholesale price must be set and lower than the retail price", path: ["wholesalePrice"] }
+  )
+  .refine(
+    (data) => !data.offerWholesale || data.wholesaleMinQty !== undefined,
+    { message: "Set the minimum quantity for wholesale", path: ["wholesaleMinQty"] }
+  )
   .refine(
     (data) => data.paymentMode !== "partial" || (data.depositPercent !== undefined && data.depositPercent >= 1 && data.depositPercent <= 100),
     { message: "Set the deposit percentage buyers pay upfront", path: ["depositPercent"] }
@@ -98,6 +109,9 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           lowStockThreshold: editProduct.lowStockThreshold,
           paymentMode: ((editProduct as any).paymentOptions?.mode ?? "momo") as FormValues["paymentMode"],
           depositPercent: (editProduct as any).paymentOptions?.percent ?? 50,
+          offerWholesale: (editProduct as any).wholesalePrice != null,
+          wholesalePrice: (editProduct as any).wholesalePrice,
+          wholesaleMinQty: (editProduct as any).wholesaleMinQty ?? 5,
           tags: editProduct.tags?.join(", ") ?? "",
         }
       : {
@@ -105,11 +119,14 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           lowStockThreshold: 5,
           paymentMode: "momo",
           depositPercent: 50,
+          offerWholesale: false,
+          wholesaleMinQty: 5,
         },
   });
 
   const category = watch("category");
   const paymentMode = watch("paymentMode");
+  const offerWholesale = watch("offerWholesale");
 
   // Media uploads: track selected images/videos (existing URL or Convex storage id) in state.
   type MediaItem = { value: string; previewUrl: string };
@@ -199,6 +216,9 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
         percent: data.paymentMode === "partial" ? data.depositPercent : undefined,
       };
 
+      const wholesalePrice = data.offerWholesale ? data.wholesalePrice : undefined;
+      const wholesaleMinQty = data.offerWholesale ? data.wholesaleMinQty : undefined;
+
       if (editProduct) {
         await updateProduct({
           productId: editProduct._id,
@@ -214,6 +234,8 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           videos,
           tags,
           paymentOptions,
+          wholesalePrice,
+          wholesaleMinQty,
         });
         toast.success("Product updated successfully");
       } else {
@@ -230,6 +252,8 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           videos,
           tags,
           paymentOptions,
+          wholesalePrice,
+          wholesaleMinQty,
         });
         toast.success("Product listed successfully!");
       }
@@ -329,6 +353,43 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
               <Input type="number" placeholder="Leave blank if no promo" step="0.01" {...register("promoPrice")} />
               {errors.promoPrice && <p className="text-destructive text-xs">{errors.promoPrice.message}</p>}
             </div>
+          </div>
+
+          {/* Wholesale / bulk pricing */}
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setValue("offerWholesale", !offerWholesale, { shouldValidate: true })}
+              className={cn(
+                "w-full flex items-center justify-between rounded-xl border px-4 py-3 transition-colors cursor-pointer",
+                offerWholesale ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+              )}
+            >
+              <div className="text-left">
+                <p className="text-sm font-medium">Offer wholesale / bulk pricing</p>
+                <p className="text-[11px] text-muted-foreground">
+                  Buyers who order a minimum quantity get a lower per-unit price. Retail price still applies to smaller orders.
+                </p>
+              </div>
+              <span className={cn("relative inline-flex h-6 w-11 shrink-0 rounded-full transition-colors", offerWholesale ? "bg-primary" : "bg-muted")}>
+                <span className={cn("absolute top-0.5 left-0.5 size-5 rounded-full bg-white transition-transform", offerWholesale && "translate-x-5")} />
+              </span>
+            </button>
+            {offerWholesale && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-xl border border-border p-4 bg-muted/30">
+                <div className="space-y-1.5">
+                  <Label>Wholesale price per unit (GHS) *</Label>
+                  <Input type="number" placeholder="e.g. 80" step="0.01" {...register("wholesalePrice")} />
+                  {errors.wholesalePrice && <p className="text-destructive text-xs">{errors.wholesalePrice.message}</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Minimum quantity for wholesale *</Label>
+                  <Input type="number" placeholder="e.g. 10" {...register("wholesaleMinQty")} />
+                  <p className="text-[11px] text-muted-foreground">Buyers ordering this many or more pay the wholesale price.</p>
+                  {errors.wholesaleMinQty && <p className="text-destructive text-xs">{errors.wholesaleMinQty.message}</p>}
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Payment options */}

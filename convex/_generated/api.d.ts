@@ -22,9 +22,11 @@ import type * as payments from "../payments.js";
 import type * as products from "../products.js";
 import type * as receipts from "../receipts.js";
 import type * as reports from "../reports.js";
+import type * as reviews from "../reviews.js";
 import type * as seed from "../seed.js";
 import type * as sms from "../sms.js";
 import type * as users from "../users.js";
+import type * as wishlist from "../wishlist.js";
 
 import type {
   ApiFromModules,
@@ -47,9 +49,11 @@ declare const fullApi: ApiFromModules<{
   products: typeof products;
   receipts: typeof receipts;
   reports: typeof reports;
+  reviews: typeof reviews;
   seed: typeof seed;
   sms: typeof sms;
   users: typeof users;
+  wishlist: typeof wishlist;
 }>;
 
 /**
