@@ -715,7 +715,7 @@ export default function SellerDashboardInner() {
   }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
+    <div className="max-w-6xl min-w-0 mx-auto px-3 sm:px-4 py-6 sm:py-8">
       {/* Header */}
       <div className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
@@ -735,8 +735,8 @@ export default function SellerDashboardInner() {
       </div>
 
       {/* Tabs: Products / Inventory & Revenue */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0">
+        <TabsList className="mb-6 w-full sm:w-fit">
           <TabsTrigger value="products" className="gap-2 cursor-pointer">
             <Package className="size-3.5" /> Products
           </TabsTrigger>

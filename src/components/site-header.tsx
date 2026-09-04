@@ -189,8 +189,8 @@ export default function SiteHeader() {
             <div className="my-2 border-t" style={{ borderColor: "rgba(212,175,55,0.12)" }} />
 
             <Unauthenticated>
-              <div onClick={() => setMenuOpen(false)} className="pt-1">
-                <SignInButton />
+              <div className="pt-1">
+                <SignInButton onOpenChange={(open) => { if (!open) setMenuOpen(false); }} />
               </div>
             </Unauthenticated>
 
