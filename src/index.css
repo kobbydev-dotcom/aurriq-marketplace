@@ -6149,3 +6149,52 @@ h1, h2, h3 {
     }
   }
 }
+
+/* ---- Recovered arbitrary-value utilities missing from this compiled snapshot ----
+   These classes are used in the TSX sources but were never compiled into this file,
+   which caused transparent dialog backgrounds and missing colors/sizing. */
+@layer utilities {
+  .z-\[100\] { z-index: 100; }
+  .z-\[110\] { z-index: 110; }
+  .bg-black\/80 { background-color: color-mix(in oklab, #000 80%, transparent); }
+  .bg-\[\#0c0904\] { background-color: #0c0904; }
+  .bg-\[\#0A0600\] { background-color: #0A0600; }
+  .bg-\[\#C9930A\]\/10 { background-color: color-mix(in oklab, #C9930A 10%, transparent); }
+  .bg-muted\/60 { background-color: color-mix(in oklab, var(--muted) 60%, transparent); }
+  .text-\[\#f0eae0\] { color: #f0eae0; }
+  .text-\[\#F0EAE0\] { color: #F0EAE0; }
+  .text-\[\#EDE8E0\] { color: #EDE8E0; }
+  .text-\[\#D4AF37\] { color: #D4AF37; }
+  .text-\[\#D9D2C8\] { color: #D9D2C8; }
+  .text-\[\#5A5448\] { color: #5A5448; }
+  .hover\:text-\[\#C9930A\]:hover { color: #C9930A; }
+  .hover\:text-\[\#D4AF37\]:hover { color: #D4AF37; }
+  .group:hover .group-hover\:text-\[\#D4AF37\] { color: #D4AF37; }
+  .border-\[\#c9930a\]\/25 { border-color: color-mix(in oklab, #c9930a 25%, transparent); }
+  .border-\[\#C9930A\]\/30 { border-color: color-mix(in oklab, #C9930A 30%, transparent); }
+  .border-\[\#C9930A\]\/20 { border-color: color-mix(in oklab, #C9930A 20%, transparent); }
+  .divide-x > :not(:last-child) { border-inline-start-width: 0; border-inline-end-width: 1px; border-inline-end-style: solid; }
+  .divide-\[\#1A1600\] > :not(:last-child) { border-color: #1A1600; }
+  .shadow-\[0_24px_90px_rgba\(0\,0\,0\,0\.7\)\] { box-shadow: 0 24px 90px rgba(0, 0, 0, 0.7); }
+  .text-\[15px\] { font-size: 15px; }
+  .text-\[12px\] { font-size: 12px; }
+  .leading-\[1\.05\] { line-height: 1.05; }
+  .leading-\[1\.8\] { line-height: 1.8; }
+  .leading-\[1\] { line-height: 1; }
+  .leading-\[1\.9\] { line-height: 1.9; }
+  .tracking-\[0\.15em\] { letter-spacing: 0.15em; }
+  .tracking-\[0\.45em\] { letter-spacing: 0.45em; }
+  .tracking-\[0\.3em\] { letter-spacing: 0.3em; }
+  .tracking-\[0\.35em\] { letter-spacing: 0.35em; }
+  .tracking-\[0\.25em\] { letter-spacing: 0.25em; }
+  .tracking-\[0\.12em\] { letter-spacing: 0.12em; }
+  .max-w-\[280px\] { max-width: 280px; }
+  .max-w-\[78\%\] { max-width: 78%; }
+  .max-h-\[240px\] { max-height: 240px; }
+  .min-h-\[520px\] { min-height: 520px; }
+  .max-h-\[430px\] { max-height: 430px; }
+  .stroke-\[1\.5\] { stroke-width: 1.5; }
+  @media (min-width: 48rem) {
+    .md\:grid-cols-\[280px_1fr\] { grid-template-columns: 280px 1fr; }
+  }
+}
