@@ -11,10 +11,30 @@ async function getCurrentSeller(ctx: any) {
     .unique();
 }
 
+// Resolve a media value to a displayable URL. New uploads are stored as Convex
+// storage IDs (which we resolve to a fresh signed URL); legacy external URLs
+// (e.g. seeded CDN links) are passed through unchanged.
+async function resolveMediaUrl(ctx: any, value: string | undefined | null): Promise<string> {
+  if (!value) return "";
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+  try {
+    const url = await ctx.storage.getUrl(value as any);
+    return url ?? value;
+  } catch {
+    return value;
+  }
+}
+
 async function enrichProduct(ctx: any, product: any) {
   const seller = await ctx.db.get(product.sellerId);
+  const images = await Promise.all((product.images ?? []).map((m: string) => resolveMediaUrl(ctx, m)));
+  const videos = await Promise.all((product.videos ?? []).map((m: string) => resolveMediaUrl(ctx, m)));
+  const imageUrl = product.imageUrl ? await resolveMediaUrl(ctx, product.imageUrl) : (images[0] ?? "");
   return {
     ...product,
+    images,
+    videos,
+    imageUrl,
     seller: seller ? {
       _id: seller._id,
       name: seller.name,
@@ -25,6 +45,17 @@ async function enrichProduct(ctx: any, product: any) {
     sellerIsVerified: !!seller?.isVerified,
   };
 }
+
+// Generate a short-lived upload URL the client can POST a file to. Returns the
+// URL; after POSTing, the response body contains the storageId to save.
+export const generateUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Unauthorized: You must be logged in to upload media.");
+    return await ctx.storage.generateUploadUrl();
+  },
+});
 
 // 1. Your original query to display products on the marketplace
 export const listAll = query({
@@ -180,11 +211,13 @@ export const getMyProducts = query({
     const seller = await getCurrentSeller(ctx);
     if (!seller) return [];
 
-    return await ctx.db
+    const products = await ctx.db
       .query("products")
       .withIndex("by_seller", (q) => q.eq("sellerId", seller._id))
       .order("desc")
       .collect();
+
+    return await Promise.all(products.map((product) => enrichProduct(ctx, product)));
   },
 });
 

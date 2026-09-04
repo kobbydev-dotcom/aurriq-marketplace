@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -6,7 +6,7 @@ import { useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api.js";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
-import { X, Plus, ImageIcon, AlertTriangle, Info, Video } from "lucide-react";
+import { X, Plus, ImageIcon, AlertTriangle, Info, Video, Upload, Loader2 } from "lucide-react";
 import { TrustSafetyBanner } from "@/components/trust/TrustSafetyBanner.tsx";
 import {
   Dialog,
@@ -47,14 +47,6 @@ const schema = z
     promoPrice: z.coerce.number().optional(),
     stockQuantity: z.coerce.number().int().min(0, "Stock cannot be negative"),
     lowStockThreshold: z.coerce.number().int().min(1, "Set a minimum low-stock alert number"),
-    imageUrl1: z.string().url("Enter a valid image URL").optional().or(z.literal("")),
-    imageUrl2: z.string().url("Enter a valid image URL").optional().or(z.literal("")),
-    imageUrl3: z.string().url("Enter a valid image URL").optional().or(z.literal("")),
-    imageUrl4: z.string().url("Enter a valid image URL").optional().or(z.literal("")),
-    imageUrl5: z.string().url("Enter a valid image URL").optional().or(z.literal("")),
-    imageUrl6: z.string().url("Enter a valid image URL").optional().or(z.literal("")),
-    videoUrl1: z.string().url("Enter a valid video URL").optional().or(z.literal("")),
-    videoUrl2: z.string().url("Enter a valid video URL").optional().or(z.literal("")),
     tags: z.string().optional(),
   })
   .refine(
@@ -98,14 +90,6 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           promoPrice: editProduct.promoPrice,
           stockQuantity: editProduct.stockQuantity,
           lowStockThreshold: editProduct.lowStockThreshold,
-          imageUrl1: editProduct.images[0] ?? "",
-          imageUrl2: editProduct.images[1] ?? "",
-          imageUrl3: editProduct.images[2] ?? "",
-          imageUrl4: editProduct.images[3] ?? "",
-          imageUrl5: editProduct.images[4] ?? "",
-          imageUrl6: editProduct.images[5] ?? "",
-          videoUrl1: editProduct.videos?.[0] ?? "",
-          videoUrl2: editProduct.videos?.[1] ?? "",
           tags: editProduct.tags?.join(", ") ?? "",
         }
       : {
@@ -115,15 +99,83 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
   });
 
   const category = watch("category");
-  const [imageCount, setImageCount] = useState(editProduct ? Math.max(3, Math.min(6, editProduct.images.length)) : 3);
-  const [videoCount, setVideoCount] = useState(editProduct ? Math.min(2, editProduct.videos?.length ?? 0) : 0);
+
+  // Media uploads: track selected images/videos (existing URL or Convex storage id) in state.
+  type MediaItem = { value: string; previewUrl: string };
+  const [imageMedia, setImageMedia] = useState<MediaItem[]>(
+    (editProduct?.images ?? []).filter(Boolean).map((u) => ({ value: u, previewUrl: u }))
+  );
+  const [videoMedia, setVideoMedia] = useState<MediaItem[]>(
+    (editProduct?.videos ?? []).filter(Boolean).map((u) => ({ value: u, previewUrl: u }))
+  );
+  const [uploading, setUploading] = useState(false);
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
+  const generateUploadUrl = useMutation((api.products as any).generateUploadUrl);
+
+  const uploadFile = async (file: File): Promise<string> => {
+    const uploadUrl = await generateUploadUrl();
+    const res = await fetch(uploadUrl, {
+      method: "POST",
+      headers: { "Content-Type": file.type },
+      body: file,
+    });
+    if (!res.ok) throw new Error("Upload failed");
+    const { storageId } = (await res.json()) as { storageId: string };
+    return storageId;
+  };
+
+  const handleImageFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const remaining = 6 - imageMedia.length;
+    const selected = Array.from(files).slice(0, remaining);
+    if (selected.length === 0) return;
+    setUploading(true);
+    try {
+      const uploaded: MediaItem[] = [];
+      for (const file of selected) {
+        const storageId = await uploadFile(file);
+        uploaded.push({ value: storageId, previewUrl: URL.createObjectURL(file) });
+      }
+      setImageMedia((prev) => [...prev, ...uploaded]);
+    } catch {
+      toast.error("Image upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+      if (imageInputRef.current) imageInputRef.current.value = "";
+    }
+  };
+
+  const handleVideoFiles = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const remaining = 2 - videoMedia.length;
+    const selected = Array.from(files).slice(0, remaining);
+    if (selected.length === 0) return;
+    setUploading(true);
+    try {
+      const uploaded: MediaItem[] = [];
+      for (const file of selected) {
+        const storageId = await uploadFile(file);
+        uploaded.push({ value: storageId, previewUrl: URL.createObjectURL(file) });
+      }
+      setVideoMedia((prev) => [...prev, ...uploaded]);
+    } catch {
+      toast.error("Video upload failed. Please try again.");
+    } finally {
+      setUploading(false);
+      if (videoInputRef.current) videoInputRef.current.value = "";
+    }
+  };
 
   const onSubmit = async (data: FormValues) => {
+    if (imageMedia.length === 0) {
+      toast.error("Add at least one product photo.");
+      return;
+    }
     setSubmitting(true);
     try {
-      const images = [data.imageUrl1, data.imageUrl2, data.imageUrl3].filter(
-        (u): u is string => !!u && u.length > 0
-      );
+      const images = imageMedia.map((m) => m.value);
+      const videos = videoMedia.map((m) => m.value);
       const tags = data.tags
         ? data.tags
             .split(",")
@@ -143,7 +195,7 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           variants: [{ color: "Default", stock: Number(data.stockQuantity || 0) }],
           lowStockThreshold: data.lowStockThreshold,
           images,
-          videos: [data.videoUrl1, data.videoUrl2].filter((u): u is string => !!u && u.length > 0),
+          videos,
           tags,
         });
         toast.success("Product updated successfully");
@@ -158,14 +210,14 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           variants: [{ color: "Default", stock: Number(data.stockQuantity || 0) }],
           lowStockThreshold: data.lowStockThreshold,
           images,
-          videos: [data.videoUrl1, data.videoUrl2].filter((u): u is string => !!u && u.length > 0),
+          videos,
           tags,
         });
         toast.success("Product listed successfully!");
       }
       reset();
-      setImageCount(3);
-      setVideoCount(0);
+      setImageMedia([]);
+      setVideoMedia([]);
       onClose();
     } catch (err) {
       if (err instanceof ConvexError) {
@@ -282,33 +334,99 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           </div>
 
           {/* Images and videos */}
-          <div className="space-y-2">
-            <Label>Product media</Label>
-            <p className="text-[11px] text-muted-foreground">
-              Add direct links from Cloudinary, Cloudflare Stream, or another CDN. Your first image is the cover.
-            </p>
-            <div className="space-y-2">
-              {(["imageUrl1", "imageUrl2", "imageUrl3", "imageUrl4", "imageUrl5", "imageUrl6"] as const).slice(0, imageCount).map((field, i) => (
-                <div key={field} className="flex items-center gap-2">
-                  <ImageIcon className="size-4 text-muted-foreground shrink-0" />
-                  <Input placeholder={`Image ${i + 1} URL${i === 0 ? " (main photo)" : " (optional)"}`} {...register(field)} />
-                </div>
-              ))}
+          <div className="space-y-3">
+            <div>
+              <Label>Product media</Label>
+              <p className="text-[11px] text-muted-foreground mt-0.5">
+                Upload photos and videos directly from your device. Your first photo is the cover.
+              </p>
             </div>
-            {imageCount < 6 && <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setImageCount((count) => Math.min(6, count + 1))}><Plus className="size-3.5" /> Add another photo</Button>}
-            {(errors.imageUrl1 ?? errors.imageUrl2 ?? errors.imageUrl3 ?? errors.imageUrl4 ?? errors.imageUrl5 ?? errors.imageUrl6) && (
-              <p className="text-destructive text-xs">Please enter valid image URLs</p>
-            )}
-            <div className="space-y-2 pt-2">
-              <p className="text-xs font-medium flex items-center gap-2"><Video className="size-3.5 text-primary" /> Product videos <span className="font-normal text-muted-foreground">(optional)</span></p>
-              {(["videoUrl1", "videoUrl2"] as const).slice(0, videoCount).map((field, i) => (
-                <div key={field} className="flex items-center gap-2">
-                  <Video className="size-4 text-muted-foreground shrink-0" />
-                  <Input placeholder={`Video ${i + 1} URL`} {...register(field)} />
-                </div>
-              ))}
-              {videoCount < 2 && <Button type="button" variant="outline" size="sm" className="gap-2" onClick={() => setVideoCount((count) => Math.min(2, count + 1))}><Plus className="size-3.5" /> Add a video</Button>}
-              {(errors.videoUrl1 ?? errors.videoUrl2) && <p className="text-destructive text-xs">Please enter valid video URLs</p>}
+
+            {/* Images */}
+            <div className="space-y-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {imageMedia.map((m, i) => (
+                  <div key={i} className="relative group aspect-square rounded-lg overflow-hidden border border-border bg-muted">
+                    <img src={m.previewUrl} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                    {i === 0 && (
+                      <span className="absolute top-1 left-1 bg-primary text-primary-foreground text-[9px] font-bold px-1.5 py-0.5 rounded">Cover</span>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setImageMedia((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="absolute top-1 right-1 rounded-full bg-black/70 text-white p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label="Remove photo"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                ))}
+                {imageMedia.length < 6 && (
+                  <button
+                    type="button"
+                    onClick={() => imageInputRef.current?.click()}
+                    disabled={uploading}
+                    className="aspect-square rounded-lg border border-dashed border-border hover:border-primary/60 hover:bg-primary/5 flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors disabled:opacity-50"
+                  >
+                    {uploading ? <Loader2 className="size-5 animate-spin" /> : <Plus className="size-5" />}
+                    <span className="text-[10px]">{uploading ? "Uploading..." : "Add photo"}</span>
+                  </button>
+                )}
+              </div>
+              <input
+                ref={imageInputRef}
+                type="file"
+                accept="image/*"
+                multiple
+                className="hidden"
+                onChange={(e) => handleImageFiles(e.target.files)}
+              />
+              {imageMedia.length === 0 && (
+                <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <ImageIcon className="size-3" /> No photos yet — add at least one.
+                </p>
+              )}
+            </div>
+
+            {/* Videos */}
+            <div className="space-y-2 pt-1">
+              <p className="text-xs font-medium flex items-center gap-2">
+                <Video className="size-3.5 text-primary" /> Product videos <span className="font-normal text-muted-foreground">(optional, up to 2)</span>
+              </p>
+              <div className="grid grid-cols-2 gap-2">
+                {videoMedia.map((m, i) => (
+                  <div key={i} className="relative group rounded-lg overflow-hidden border border-border bg-muted aspect-video">
+                    <video src={m.previewUrl} className="w-full h-full object-cover" controls />
+                    <button
+                      type="button"
+                      onClick={() => setVideoMedia((prev) => prev.filter((_, idx) => idx !== i))}
+                      className="absolute top-1 right-1 rounded-full bg-black/70 text-white p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                      aria-label="Remove video"
+                    >
+                      <X className="size-3" />
+                    </button>
+                  </div>
+                ))}
+                {videoMedia.length < 2 && (
+                  <button
+                    type="button"
+                    onClick={() => videoInputRef.current?.click()}
+                    disabled={uploading}
+                    className="aspect-video rounded-lg border border-dashed border-border hover:border-primary/60 hover:bg-primary/5 flex flex-col items-center justify-center gap-1 text-muted-foreground transition-colors disabled:opacity-50"
+                  >
+                    {uploading ? <Loader2 className="size-5 animate-spin" /> : <Upload className="size-4" />}
+                    <span className="text-[10px]">{uploading ? "Uploading..." : "Add video"}</span>
+                  </button>
+                )}
+              </div>
+              <input
+                ref={videoInputRef}
+                type="file"
+                accept="video/*"
+                multiple
+                className="hidden"
+                onChange={(e) => handleVideoFiles(e.target.files)}
+              />
             </div>
           </div>
 
@@ -329,8 +447,8 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
             <Button type="button" variant="secondary" onClick={() => { reset(); onClose(); }} className="flex-1">
               Cancel
             </Button>
-            <Button type="submit" disabled={submitting} className="flex-1">
-              {submitting ? "Saving..." : editProduct ? "Save Changes" : "List Product"}
+            <Button type="submit" disabled={submitting || uploading} className="flex-1">
+              {submitting ? "Saving..." : uploading ? "Uploading..." : editProduct ? "Save Changes" : "List Product"}
             </Button>
           </div>
         </form>
