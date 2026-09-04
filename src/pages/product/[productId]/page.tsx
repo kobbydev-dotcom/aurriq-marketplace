@@ -1,8 +1,8 @@
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api.js";
-import { useState } from "react";
-import { ShoppingCart, MessageCircle, Phone, ArrowLeft, Package, ChevronLeft, ChevronRight, Loader2, Plus, Minus, Flag, Video } from "lucide-react";
+import { useState, useEffect, useRef } from "react";
+import { ShoppingCart, MessageCircle, Phone, ArrowLeft, Package, ChevronLeft, ChevronRight, Loader2, Plus, Minus, Flag, Video, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -14,6 +14,7 @@ import type { Id } from "../../../../convex/_generated/dataModel.d.ts";
 import { VerifiedBadge } from "@/components/trust/VerifiedBadge.tsx";
 import { TrustSafetyBanner } from "@/components/trust/TrustSafetyBanner.tsx";
 import { ReportDialog } from "@/components/trust/ReportDialog.tsx";
+import { FollowButton } from "@/components/follow-button.tsx";
 import {
   Dialog,
   DialogContent,
@@ -32,6 +33,11 @@ export default function ProductDetailPage() {
   );
   const addToCart = useMutation(api.cart.addToCart);
   const sendMessage = useMutation(api.messages.sendMessage);
+  const trackEvent = useMutation((api.analytics as any).trackEvent);
+  const viewCount = useQuery(
+    (api.analytics as any).getProductViewCount,
+    productId ? { productId: productId as Id<"products"> } : "skip"
+  ) as number | undefined;
 
   const [selectedImage, setSelectedImage] = useState(0);
   const [qty, setQty] = useState(1);
@@ -40,6 +46,26 @@ export default function ProductDetailPage() {
   const [messageText, setMessageText] = useState("");
   const [sending, setSending] = useState(false);
   const [callOpen, setCallOpen] = useState(false);
+  const trackedRef = useRef(false);
+
+  // Track the product view + seller shop view once per mount.
+  useEffect(() => {
+    if (!product || trackedRef.current) return;
+    trackedRef.current = true;
+    trackEvent({
+      subjectType: "product",
+      subjectId: String(product._id),
+      kind: "product_view",
+      productId: product._id,
+      sellerId: product.sellerId,
+    }).catch(() => {});
+    trackEvent({
+      subjectType: "seller",
+      subjectId: String(product.sellerId),
+      kind: "shop_view",
+      sellerId: product.sellerId,
+    }).catch(() => {});
+  }, [product, trackEvent]);
 
   const sellerBusinessType = (product as any)?.seller?.businessType ?? (product as any)?.sellerBusinessType;
   const sellerPhone = (product as any)?.seller?.phone ?? (product as any)?.sellerPhone;
@@ -216,7 +242,7 @@ export default function ProductDetailPage() {
             <h1 className="text-3xl font-light mb-2" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
               {product.name}
             </h1>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <Badge variant="secondary" className="text-xs capitalize">{product.category}</Badge>
               {!isOutOfStock ? (
                 <Badge variant="secondary" className="text-xs bg-emerald-500/10 text-emerald-400 border-emerald-500/20">
@@ -224,6 +250,11 @@ export default function ProductDetailPage() {
                 </Badge>
               ) : (
                 <Badge variant="destructive" className="text-xs">Out of Stock</Badge>
+              )}
+              {typeof viewCount === "number" && viewCount > 0 && (
+                <span className="text-[11px] text-muted-foreground flex items-center gap-1">
+                  <Eye className="size-3" /> {viewCount} view{viewCount !== 1 ? "s" : ""}
+                </span>
               )}
             </div>
           </div>
@@ -243,30 +274,33 @@ export default function ProductDetailPage() {
           </div>
 
           {/* Seller */}
-          <div className="bg-card border border-border rounded-lg px-4 py-3 flex items-center justify-between">
-            <div>
-              <p className="text-xs text-muted-foreground">Sold by</p>
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <p className="text-sm font-medium">{(product as any).seller?.name ?? "Aurriq Seller"}</p>
-                {(product as any).seller?.isVerified && <VerifiedBadge size="sm" />}
-                {businessLabel && (
-                  <Badge className="text-[10px] bg-primary/15 text-primary border-primary/30">{businessLabel}</Badge>
-                )}
+          <div className="bg-card border border-border rounded-lg px-4 py-3 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground">Sold by</p>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <p className="text-sm font-medium">{(product as any).seller?.name ?? "Aurriq Seller"}</p>
+                  {(product as any).seller?.isVerified && <VerifiedBadge size="sm" />}
+                  {businessLabel && (
+                    <Badge className="text-[10px] bg-primary/15 text-primary border-primary/30">{businessLabel}</Badge>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center">
+                <Authenticated>
+                  <ReportDialog
+                    targetType="seller"
+                    targetSellerId={product.sellerId}
+                    sellerName={(product as any).seller?.name ?? "Seller"}
+                  >
+                    <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors cursor-pointer">
+                      <Flag className="size-3" /> Report Seller
+                    </button>
+                  </ReportDialog>
+                </Authenticated>
               </div>
             </div>
-            <div className="flex items-center">
-              <Authenticated>
-                <ReportDialog
-                  targetType="seller"
-                  targetSellerId={product.sellerId}
-                  sellerName={(product as any).seller?.name ?? "Seller"}
-                >
-                  <button className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive transition-colors cursor-pointer">
-                    <Flag className="size-3" /> Report Seller
-                  </button>
-                </ReportDialog>
-              </Authenticated>
-            </div>
+            <FollowButton userId={product.sellerId} sellerName={(product as any).seller?.name} />
           </div>
 
           {/* Trust & Safety Banner */}

@@ -37,6 +37,7 @@ import { Empty, EmptyHeader, EmptyMedia, EmptyTitle, EmptyDescription, EmptyCont
 import ProductFormDialog from "@/pages/seller/dashboard/_components/ProductFormDialog.tsx";
 import type { Doc, Id } from "../../../../../convex/_generated/dataModel.d.ts";
 import SellerMessagesTab from "@/pages/seller/dashboard/_components/SellerMessagesTab.tsx";
+import AnalyticsTab from "@/pages/seller/dashboard/_components/AnalyticsTab.tsx";
 import {
   Select,
   SelectContent,
@@ -694,6 +695,9 @@ export default function SellerDashboardInner() {
           <TabsTrigger value="payments" className="gap-2 cursor-pointer">
             <CreditCard className="size-3.5" /> Payments
           </TabsTrigger>
+          <TabsTrigger value="analytics" className="gap-2 cursor-pointer">
+            <TrendingUp className="size-3.5" /> Analytics
+          </TabsTrigger>
           <TabsTrigger value="history" className="gap-2 cursor-pointer">
             <Clock className="size-3.5" /> History
           </TabsTrigger>
@@ -804,6 +808,10 @@ export default function SellerDashboardInner() {
             </div>
             <PaymentSettingsTab currentUser={currentUser} onSave={handleSavePaymentSettings} />
           </div>
+        </TabsContent>
+
+        <TabsContent value="analytics">
+          <AnalyticsTab />
         </TabsContent>
 
         <TabsContent value="history">

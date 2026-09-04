@@ -1,4 +1,5 @@
-﻿import { mutation, query } from "./_generated/server";
+﻿import { mutation, query, internalMutation } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 
 async function getCurrentSeller(ctx: any) {
@@ -254,7 +255,44 @@ export const createProduct = mutation({
       isActive: true,
     });
 
+    // Notify followers + log activity.
+    await ctx.scheduler.runAfter(0, internal.products.onProductCreated, {
+      productId,
+      sellerId: user._id,
+    });
+
     return productId;
+  },
+});
+
+// Internal: after a product is created, notify the seller's followers + log activity.
+export const onProductCreated = internalMutation({
+  args: { productId: v.id("products"), sellerId: v.id("users") },
+  handler: async (ctx, args) => {
+    const product: any = await ctx.db.get(args.productId);
+    const seller: any = await ctx.db.get(args.sellerId);
+    if (!product || !seller) return;
+
+    await ctx.runMutation(internal.notifications.logActivity, {
+      userId: args.sellerId,
+      action: `Listed "${product.name}" for sale`,
+      meta: { productId: args.productId },
+    });
+
+    const followers = await ctx.db
+      .query("follows")
+      .withIndex("by_followee", (q) => q.eq("followeeId", args.sellerId))
+      .collect();
+
+    for (const f of followers) {
+      await ctx.runMutation(internal.notifications.createNotification, {
+        userId: f.followerId,
+        type: "new_product",
+        title: `${seller.name ?? "A seller you follow"} posted a new product`,
+        body: product.name,
+        link: `/product/${args.productId}`,
+      });
+    }
   },
 });
 

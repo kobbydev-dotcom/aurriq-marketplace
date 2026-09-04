@@ -239,6 +239,15 @@ export const applyPaymentWebhook = internalMutation({
         productId: order.productId,
       });
 
+      // Track the purchase for analytics.
+      await ctx.runMutation(internal.analytics.recordEvent, {
+        subjectType: "product",
+        subjectId: String(order.productId),
+        kind: "purchase",
+        productId: order.productId,
+        sellerId: order.sellerId,
+      });
+
       // Send the buyer a receipt via SMS + email.
       await ctx.scheduler.runAfter(0, internal.receipts.sendOrderReceipt, {
         orderId: order._id,

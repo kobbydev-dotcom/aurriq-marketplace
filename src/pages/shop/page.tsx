@@ -2,8 +2,9 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api.js";
 import { useSearchParams, Link } from "react-router-dom";
-import { Search, Package, MapPin, Loader2, Navigation, Store, Map as MapIcon, List } from "lucide-react";
+import { Search, Package, MapPin, Loader2, Navigation, Store, Map as MapIcon, List, Heart } from "lucide-react";
 import { MapContainer, TileLayer, Marker, Popup, Circle } from "react-leaflet";
+import MarkerClusterGroup from "react-leaflet-cluster";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import { Input } from "@/components/ui/input.tsx";
@@ -52,6 +53,40 @@ const buyerIcon = L.divIcon({
 });
 
 type Coords = { lat: number; lng: number };
+
+// "From people you follow" — latest products from sellers the buyer follows.
+function FollowingFeed() {
+  const feed = useQuery((api.follows as any).getFollowedProducts, {}) as any[] | undefined;
+
+  if (!feed || feed.length === 0) return null;
+
+  return (
+    <div className="mb-10">
+      <h2 className="text-lg font-medium flex items-center gap-2 mb-4">
+        <Heart className="size-4 text-primary" /> From people you follow
+      </h2>
+      <div className="flex gap-4 overflow-x-auto pb-2 -mx-4 px-4">
+        {feed.map((p) => {
+          const price = p.promoPrice ?? p.originalPrice;
+          return (
+            <Link key={p._id} to={`/product/${p._id}`} className="group shrink-0 w-40">
+              <div className="aspect-square rounded-xl overflow-hidden bg-muted border border-border mb-2">
+                {p.images?.[0] ? (
+                  <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center"><Package className="size-8 text-muted-foreground/30" /></div>
+                )}
+              </div>
+              <p className="text-xs font-medium truncate group-hover:text-primary transition-colors">{p.name}</p>
+              <p className="text-[10px] text-muted-foreground truncate">{p.sellerName}</p>
+              <p className="text-xs font-bold text-primary mt-0.5">{formatCurrency(price)}</p>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
 
 // "Near You" — opt-in buyer geolocation listing nearby shops/sellers + map view.
 function NearYouSection({ coords, locating, enabled, onDetect }: {
@@ -130,20 +165,22 @@ function NearYouSection({ coords, locating, enabled, onDetect }: {
             <Marker position={[coords.lat, coords.lng]} icon={buyerIcon}>
               <Popup>You are here</Popup>
             </Marker>
-            {nearby.map((s) =>
-              typeof s.latitude === "number" && typeof s.longitude === "number" ? (
-                <Marker key={s._id} position={[s.latitude, s.longitude]}>
-                  <Popup>
-                    <div style={{ minWidth: 140 }}>
-                      <strong>{s.name}</strong>
-                      {s.businessType && <div style={{ fontSize: 11, color: "#c9930a" }}>{BUSINESS_LABEL[s.businessType] ?? "Beauty Pro"}</div>}
-                      <div style={{ fontSize: 11, color: "#666" }}>{s.distanceKm < 1 ? `${Math.round(s.distanceKm * 1000)} m` : `${s.distanceKm.toFixed(1)} km`} away</div>
-                      <a href={`/shop?sellerId=${s._id}`} style={{ fontSize: 12, color: "#c9930a", fontWeight: 600 }}>Visit shop →</a>
-                    </div>
-                  </Popup>
-                </Marker>
-              ) : null
-            )}
+            <MarkerClusterGroup chunkedLoading maxClusterRadius={48} showCoverageOnHover={false}>
+              {nearby.map((s) =>
+                typeof s.latitude === "number" && typeof s.longitude === "number" ? (
+                  <Marker key={s._id} position={[s.latitude, s.longitude]}>
+                    <Popup>
+                      <div style={{ minWidth: 140 }}>
+                        <strong>{s.name}</strong>
+                        {s.businessType && <div style={{ fontSize: 11, color: "#c9930a" }}>{BUSINESS_LABEL[s.businessType] ?? "Beauty Pro"}</div>}
+                        <div style={{ fontSize: 11, color: "#666" }}>{s.distanceKm < 1 ? `${Math.round(s.distanceKm * 1000)} m` : `${s.distanceKm.toFixed(1)} km`} away</div>
+                        <a href={`/shop?sellerId=${s._id}`} style={{ fontSize: 12, color: "#c9930a", fontWeight: 600 }}>Visit shop →</a>
+                      </div>
+                    </Popup>
+                  </Marker>
+                ) : null
+              )}
+            </MarkerClusterGroup>
           </MapContainer>
         </div>
       ) : (
@@ -293,6 +330,9 @@ export default function ShopPage() {
       {!sellerIdParam && (
         <NearYouSection coords={buyerCoords} locating={locating} enabled={locationEnabled} onDetect={detectLocation} />
       )}
+
+      {/* Products from people the buyer follows */}
+      {!sellerIdParam && <FollowingFeed />}
 
       {/* Distance filter for the product grid */}
       {!sellerIdParam && (

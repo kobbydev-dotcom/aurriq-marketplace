@@ -112,6 +112,28 @@ export default defineSchema({
   })
     .index("by_user", ["userId"]),
 
+  // Social follows — anyone can follow anyone.
+  follows: defineTable({
+    followerId: v.id("users"),
+    followeeId: v.id("users"),
+  })
+    .index("by_follower", ["followerId"])
+    .index("by_followee", ["followeeId"])
+    .index("by_pair", ["followerId", "followeeId"]),
+
+  // Analytics events — product views, shop/profile views, purchases, etc.
+  analyticsEvents: defineTable({
+    subjectType: v.string(), // "product" | "seller"
+    subjectId: v.string(),
+    kind: v.string(), // "product_view" | "shop_view" | "purchase"
+    actorId: v.optional(v.id("users")),
+    sellerId: v.optional(v.id("users")),
+    productId: v.optional(v.id("products")),
+  })
+    .index("by_subject", ["subjectType", "subjectId"])
+    .index("by_seller", ["sellerId"])
+    .index("by_product", ["productId"]),
+
   reports: defineTable({
     reporterId: v.id("users"),
     targetProductId: v.optional(v.id("products")),
