@@ -11,6 +11,17 @@ async function getCurrentSeller(ctx: any) {
     .unique();
 }
 
+// Haversine distance in kilometers between two coordinates.
+function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // Resolve a media value to a displayable URL. New uploads are stored as Convex
 // storage IDs (which we resolve to a fresh signed URL); legacy external URLs
 // (e.g. seeded CDN links) are passed through unchanged.
@@ -67,15 +78,30 @@ export const listAll = query({
     category: v.optional(v.string()),
     search: v.optional(v.string()),
     sellerId: v.optional(v.id("users")),
+    nearLat: v.optional(v.number()),
+    nearLng: v.optional(v.number()),
+    maxDistanceKm: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
     const products = await ctx.db.query("products").collect();
     const normalizedSearch = args.search?.trim().toLowerCase();
+    const filterByDistance =
+      typeof args.nearLat === "number" && typeof args.nearLng === "number" && typeof args.maxDistanceKm === "number";
 
     const filtered = products.filter((product) => {
       if (!product.isActive) return false;
       if (args.category && product.category !== args.category) return false;
       if (args.sellerId && product.sellerId !== args.sellerId) return false;
+
+      // Distance filter: only products from sellers within the radius.
+      if (filterByDistance) {
+        const p: any = product;
+        if (!(p.sellerLocationShared && typeof p.sellerLatitude === "number" && typeof p.sellerLongitude === "number")) {
+          return false;
+        }
+        const d = distanceKm(args.nearLat!, args.nearLng!, p.sellerLatitude, p.sellerLongitude);
+        if (d > args.maxDistanceKm!) return false;
+      }
 
       if (!normalizedSearch) return true;
 
@@ -94,7 +120,22 @@ export const listAll = query({
       return haystack.includes(normalizedSearch);
     });
 
-    return await Promise.all(filtered.map((product) => enrichProduct(ctx, product)));
+    let enriched = await Promise.all(filtered.map((product) => enrichProduct(ctx, product)));
+
+    // Attach distance for display when filtering by proximity.
+    if (filterByDistance) {
+      enriched = enriched
+        .map((p: any) => ({
+          ...p,
+          distanceKm:
+            typeof p.sellerLatitude === "number" && typeof p.sellerLongitude === "number"
+              ? distanceKm(args.nearLat!, args.nearLng!, p.sellerLatitude, p.sellerLongitude)
+              : undefined,
+        }))
+        .sort((a: any, b: any) => (a.distanceKm ?? Infinity) - (b.distanceKm ?? Infinity));
+    }
+
+    return enriched;
   },
 });
 
@@ -199,6 +240,12 @@ export const createProduct = mutation({
       tags: args.tags,
       variants: args.variants,
       paymentOptions: args.paymentOptions ?? { mode: "momo" },
+
+      // Denormalized seller location for distance filtering.
+      sellerLatitude: (user as any).latitude,
+      sellerLongitude: (user as any).longitude,
+      sellerLocationLabel: (user as any).locationLabel,
+      sellerLocationShared: (user as any).locationShared ?? false,
 
       // Hardcoded tracking parameters required by schema initialization:
       sellerId: user._id,
@@ -316,6 +363,11 @@ export const updateProduct = mutation({
       tags: args.tags ?? product.tags,
       variants: nextVariants,
       paymentOptions: (args as any).paymentOptions ?? (product as any).paymentOptions,
+      // Refresh denormalized seller location in case the seller moved / toggled sharing.
+      sellerLatitude: (user as any).latitude,
+      sellerLongitude: (user as any).longitude,
+      sellerLocationLabel: (user as any).locationLabel,
+      sellerLocationShared: (user as any).locationShared ?? false,
       isActive: typeof args.isActive === "boolean" ? args.isActive : product.isActive,
       lowStockAlertSent: nextStock > nextThreshold ? false : product.lowStockAlertSent,
       outOfStockAlertSent: nextStock > 0 ? false : product.outOfStockAlertSent,
@@ -344,5 +396,26 @@ export const deleteProduct = mutation({
 
     await ctx.db.delete(args.productId);
     return true;
+  },
+});
+
+// One-off: backfill denormalized seller location onto existing products.
+export const backfillSellerLocation = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const products = await ctx.db.query("products").collect();
+    let updated = 0;
+    for (const product of products) {
+      const seller: any = await ctx.db.get(product.sellerId);
+      if (!seller) continue;
+      await ctx.db.patch(product._id, {
+        sellerLatitude: seller.latitude,
+        sellerLongitude: seller.longitude,
+        sellerLocationLabel: seller.locationLabel,
+        sellerLocationShared: seller.locationShared ?? false,
+      });
+      updated++;
+    }
+    return { updated };
   },
 });

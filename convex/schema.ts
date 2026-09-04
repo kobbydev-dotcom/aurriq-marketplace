@@ -67,6 +67,11 @@ export default defineSchema({
         percent: v.optional(v.number()),
       })
     ),
+    // Denormalized seller location (copied at create/update) for distance filtering.
+    sellerLatitude: v.optional(v.number()),
+    sellerLongitude: v.optional(v.number()),
+    sellerLocationLabel: v.optional(v.string()),
+    sellerLocationShared: v.optional(v.boolean()),
   }).index("by_seller", ["sellerId"]),
 
   messages: defineTable({

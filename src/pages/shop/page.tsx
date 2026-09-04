@@ -2,7 +2,10 @@ import { useState } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api.js";
 import { useSearchParams, Link } from "react-router-dom";
-import { Search, Package, MapPin, Loader2, Navigation, Store } from "lucide-react";
+import { Search, Package, MapPin, Loader2, Navigation, Store, Map as MapIcon, List } from "lucide-react";
+import { MapContainer, TileLayer, Marker, Popup, Circle } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { Input } from "@/components/ui/input.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -33,30 +36,36 @@ const BUSINESS_LABEL: Record<string, string> = {
   other: "Beauty Pro",
 };
 
-// "Near You" — opt-in buyer geolocation listing nearby shops/sellers.
-function NearYouSection() {
-  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
-  const [locating, setLocating] = useState(false);
-  const [enabled, setEnabled] = useState(false);
+// Fix Leaflet's default marker icons (broken by bundlers).
+delete (L.Icon.Default.prototype as any)._getIconUrl;
+L.Icon.Default.mergeOptions({
+  iconRetinaUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon-2x.png",
+  iconUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-icon.png",
+  shadowUrl: "https://unpkg.com/leaflet@1.9.4/dist/images/marker-shadow.png",
+});
+
+const buyerIcon = L.divIcon({
+  className: "",
+  html: `<div style="width:16px;height:16px;border-radius:50%;background:#3b82f6;border:3px solid #fff;box-shadow:0 0 0 3px rgba(59,130,246,0.35)"></div>`,
+  iconSize: [16, 16],
+  iconAnchor: [8, 8],
+});
+
+type Coords = { lat: number; lng: number };
+
+// "Near You" — opt-in buyer geolocation listing nearby shops/sellers + map view.
+function NearYouSection({ coords, locating, enabled, onDetect }: {
+  coords: Coords | null;
+  locating: boolean;
+  enabled: boolean;
+  onDetect: () => void;
+}) {
+  const [view, setView] = useState<"list" | "map">("list");
 
   const nearby = useQuery(
     (api.users as any).getNearbyShops,
     enabled && coords ? { latitude: coords.lat, longitude: coords.lng } : "skip"
   ) as any[] | undefined;
-
-  const detect = () => {
-    if (!("geolocation" in navigator)) return;
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-        setEnabled(true);
-        setLocating(false);
-      },
-      () => setLocating(false),
-      { enableHighAccuracy: true, timeout: 10000 }
-    );
-  };
 
   return (
     <div className="mb-10">
@@ -67,17 +76,35 @@ function NearYouSection() {
           </h2>
           <p className="text-xs text-muted-foreground">Salons, barbershops, nail & lash techs and sellers close to you.</p>
         </div>
-        <button
-          onClick={detect}
-          disabled={locating}
-          className={cn(
-            "shrink-0 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors cursor-pointer",
-            enabled ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/50"
+        <div className="flex items-center gap-2 shrink-0">
+          {enabled && nearby && nearby.length > 0 && (
+            <div className="flex rounded-full border border-border overflow-hidden">
+              <button
+                onClick={() => setView("list")}
+                className={cn("px-2.5 py-1.5 text-xs flex items-center gap-1 cursor-pointer", view === "list" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+              >
+                <List className="size-3.5" /> List
+              </button>
+              <button
+                onClick={() => setView("map")}
+                className={cn("px-2.5 py-1.5 text-xs flex items-center gap-1 cursor-pointer", view === "map" ? "bg-primary text-primary-foreground" : "text-muted-foreground")}
+              >
+                <MapIcon className="size-3.5" /> Map
+              </button>
+            </div>
           )}
-        >
-          {locating ? <Loader2 className="size-3.5 animate-spin" /> : <MapPin className="size-3.5" />}
-          {enabled ? "Location on" : "Use my location"}
-        </button>
+          <button
+            onClick={onDetect}
+            disabled={locating}
+            className={cn(
+              "shrink-0 inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full border transition-colors cursor-pointer",
+              enabled ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/50"
+            )}
+          >
+            {locating ? <Loader2 className="size-3.5 animate-spin" /> : <MapPin className="size-3.5" />}
+            {enabled ? "Location on" : "Use my location"}
+          </button>
+        </div>
       </div>
 
       {!enabled ? (
@@ -92,6 +119,33 @@ function NearYouSection() {
         <p className="text-xs text-muted-foreground border border-dashed border-border rounded-xl px-4 py-6 text-center">
           No shops near you yet. Sellers who share their location will appear here.
         </p>
+      ) : view === "map" && coords ? (
+        <div className="rounded-xl overflow-hidden border border-border">
+          <MapContainer center={[coords.lat, coords.lng]} zoom={13} style={{ height: "380px", width: "100%" }} scrollWheelZoom>
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <Circle center={[coords.lat, coords.lng]} radius={800} pathOptions={{ color: "#3b82f6", fillColor: "#3b82f6", fillOpacity: 0.08, weight: 1 }} />
+            <Marker position={[coords.lat, coords.lng]} icon={buyerIcon}>
+              <Popup>You are here</Popup>
+            </Marker>
+            {nearby.map((s) =>
+              typeof s.latitude === "number" && typeof s.longitude === "number" ? (
+                <Marker key={s._id} position={[s.latitude, s.longitude]}>
+                  <Popup>
+                    <div style={{ minWidth: 140 }}>
+                      <strong>{s.name}</strong>
+                      {s.businessType && <div style={{ fontSize: 11, color: "#c9930a" }}>{BUSINESS_LABEL[s.businessType] ?? "Beauty Pro"}</div>}
+                      <div style={{ fontSize: 11, color: "#666" }}>{s.distanceKm < 1 ? `${Math.round(s.distanceKm * 1000)} m` : `${s.distanceKm.toFixed(1)} km`} away</div>
+                      <a href={`/shop?sellerId=${s._id}`} style={{ fontSize: 12, color: "#c9930a", fontWeight: 600 }}>Visit shop →</a>
+                    </div>
+                  </Popup>
+                </Marker>
+              ) : null
+            )}
+          </MapContainer>
+        </div>
       ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
           {nearby.map((s) => (
@@ -143,11 +197,34 @@ export default function ShopPage() {
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch] = useDebounce(searchInput, 350);
 
+  // Shared buyer location (used by the Near You map + the product distance filter)
+  const [buyerCoords, setBuyerCoords] = useState<Coords | null>(null);
+  const [locating, setLocating] = useState(false);
+  const [locationEnabled, setLocationEnabled] = useState(false);
+  const [maxDistance, setMaxDistance] = useState<number | null>(null);
+
+  const detectLocation = () => {
+    if (!("geolocation" in navigator)) return;
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setBuyerCoords({ lat: pos.coords.latitude, lng: pos.coords.longitude });
+        setLocationEnabled(true);
+        setLocating(false);
+      },
+      () => setLocating(false),
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
   // UPGRADE: Pass the optional sellerId down into your backend query hook
   const products = useQuery(api.products.listAll, {
       category: categoryParam || undefined,
       search: debouncedSearch || undefined,
       sellerId: sellerIdParam || undefined,
+      nearLat: maxDistance != null && buyerCoords ? buyerCoords.lat : undefined,
+      nearLng: maxDistance != null && buyerCoords ? buyerCoords.lng : undefined,
+      maxDistanceKm: maxDistance ?? undefined,
     } as any);
 
   const setCategory = (cat: string) => {
@@ -213,7 +290,38 @@ export default function ShopPage() {
       </div>
 
       {/* Nearby shops discovery */}
-      {!sellerIdParam && <NearYouSection />}
+      {!sellerIdParam && (
+        <NearYouSection coords={buyerCoords} locating={locating} enabled={locationEnabled} onDetect={detectLocation} />
+      )}
+
+      {/* Distance filter for the product grid */}
+      {!sellerIdParam && (
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+            <MapPin className="size-3.5 text-primary" /> Distance:
+          </span>
+          {([null, 5, 10, 25, 50] as const).map((d) => (
+            <button
+              key={String(d)}
+              onClick={() => {
+                if (d != null && !locationEnabled) detectLocation();
+                setMaxDistance(d);
+              }}
+              className={cn(
+                "px-3 py-1.5 text-xs rounded-full border transition-all cursor-pointer",
+                maxDistance === d
+                  ? "bg-primary text-primary-foreground border-primary"
+                  : "border-border text-muted-foreground hover:border-primary/50 hover:text-foreground"
+              )}
+            >
+              {d == null ? "Any distance" : `Within ${d} km`}
+            </button>
+          ))}
+          {maxDistance != null && !locationEnabled && (
+            <span className="text-[11px] text-amber-500">enable location to apply</span>
+          )}
+        </div>
+      )}
 
       {/* Products Grid */}
       {products === undefined ? (
@@ -310,6 +418,12 @@ export default function ShopPage() {
                           : (p as any).sellerBusinessType === "makeup" ? "Makeup Artist"
                           : (p as any).sellerBusinessType === "spa" ? "Spa"
                           : "Beauty Pro"}
+                      </span>
+                    )}
+                    {typeof (p as any).distanceKm === "number" && (
+                      <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-blue-500/10 text-blue-400 border border-blue-500/20 flex items-center gap-0.5">
+                        <MapPin className="size-2.5" />
+                        {(p as any).distanceKm < 1 ? `${Math.round((p as any).distanceKm * 1000)} m` : `${(p as any).distanceKm.toFixed(1)} km`}
                       </span>
                     )}
                   </div>

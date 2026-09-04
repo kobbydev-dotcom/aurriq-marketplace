@@ -38,6 +38,8 @@ export const getNearbyShops = query({
         businessType: s.businessType,
         isVerified: s.isVerified,
         locationLabel: s.locationLabel,
+        latitude: s.latitude,
+        longitude: s.longitude,
         distanceKm: distanceKm(args.latitude, args.longitude, s.latitude, s.longitude),
       }))
       .filter((s: any) => s.distanceKm <= radius)
