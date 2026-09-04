@@ -27,6 +27,7 @@ export default function ProfilePage() {
 
   // Convex data
   const user = useQuery(api.users.current);
+  const storeUser = useMutation(api.users.storeUser);
   const updateProfile = useMutation(api.users.updateProfile);
   const generateAvatarUploadUrl = useMutation(api.users.generateAvatarUploadUrl);
   const avatarUrl = useQuery(
@@ -50,6 +51,7 @@ export default function ProfilePage() {
   // Sync fields from Convex when the user loads
   useEffect(() => {
     if (user) {
+      void storeUser().catch((error) => console.error("Profile identity sync failed", error));
       setFullName(user.name ?? "");
       setPhone(user.phone ?? "");
       setNotifyEmail((user as any).notifyEmail ?? "");
@@ -61,7 +63,7 @@ export default function ProfilePage() {
         setCoords({ lat: (user as any).latitude, lng: (user as any).longitude });
       }
     }
-  }, [user]);
+  }, [user?._id, user?.name, storeUser]);
 
   const detectLocation = () => {
     if (!("geolocation" in navigator)) {
