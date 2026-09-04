@@ -14,6 +14,7 @@ export default defineSchema({
     isSeller: v.optional(v.boolean()),
     isVerified: v.optional(v.boolean()),
     tokenIdentifier: v.optional(v.string()),
+    authSubject: v.optional(v.string()),
     phone: v.optional(v.string()),
     avatar: v.optional(v.string()),
     role: v.optional(v.string()),
@@ -42,6 +43,7 @@ export default defineSchema({
     marketplacePaymentReference: v.optional(v.string()),
   })
   .index("by_token", ["tokenIdentifier"])
+  .index("by_auth_subject", ["authSubject"])
   .index("email", ["email"]),
 
   products: defineTable({

@@ -157,6 +157,9 @@ export const storeUser = mutation({
     const identityEmail = typeof (identity as any).email === "string"
       ? String((identity as any).email).trim().toLowerCase()
       : undefined;
+    const authSubject = typeof (identity as any).subject === "string"
+      ? String((identity as any).subject).trim()
+      : undefined;
     const providerName = identityDisplayName(identity, identityEmail);
     const providerImage = identity.picture || (identity as any).pictureUrl || undefined;
 
@@ -167,9 +170,17 @@ export const storeUser = mutation({
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
 
+    if (user === null && authSubject) {
+      user = await ctx.db
+        .query("users")
+        .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
+        .unique();
+    }
+
     if (user !== null) {
       const patch: Record<string, unknown> = {};
       if (!user.email && identityEmail) patch.email = identityEmail;
+      if (!user.authSubject && authSubject) patch.authSubject = authSubject;
       if (isAnonymousPlaceholder(user.name) && providerName) patch.name = providerName;
       if (!user.image && providerImage) patch.image = providerImage;
       if (!user.tokenIdentifier || user.tokenIdentifier !== identity.tokenIdentifier) {
@@ -188,6 +199,7 @@ export const storeUser = mutation({
         const patch: Record<string, unknown> = {
           tokenIdentifier: identity.tokenIdentifier,
         };
+        if (authSubject) patch.authSubject = authSubject;
         if (isAnonymousPlaceholder(user.name) && providerName) patch.name = providerName;
         if (!user.image && providerImage) patch.image = providerImage;
         await ctx.db.patch(user._id, patch as any);
@@ -200,6 +212,7 @@ export const storeUser = mutation({
 
     return await ctx.db.insert("users", {
       tokenIdentifier: identity.tokenIdentifier!,
+      authSubject,
       email: identityEmail,
       name,
       image: imageUrl,
@@ -215,9 +228,21 @@ export const current = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
-    return await ctx.db
+    const user = await ctx.db
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+
+    if (user) return user;
+
+    const authSubject = typeof (identity as any).subject === "string"
+      ? String((identity as any).subject).trim()
+      : undefined;
+    if (!authSubject) return null;
+
+    return await ctx.db
+      .query("users")
+      .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
       .unique();
   },
 });
