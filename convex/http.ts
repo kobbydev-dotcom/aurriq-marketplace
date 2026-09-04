@@ -1,6 +1,6 @@
 import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
-import { internal } from "./_generated/api";
+import { internal, api } from "./_generated/api";
 import { auth } from "./auth";
 
 const http = httpRouter();
@@ -85,6 +85,43 @@ http.route({
 		}
 
 		return new Response("ok", { status: 200 });
+	}),
+});
+
+const CORS_HEADERS = {
+	"Access-Control-Allow-Origin": "*",
+	"Access-Control-Allow-Methods": "GET, OPTIONS",
+	"Access-Control-Allow-Headers": "Content-Type",
+};
+
+// Public JSON: a seller's storefront, by Convex sellerId or DOABookPro slug.
+// Lets the DOABookPro client booking page embed the owner's shop with no auth.
+http.route({
+	path: "/storefront",
+	method: "OPTIONS",
+	handler: httpAction(async () => new Response(null, { status: 204, headers: CORS_HEADERS })),
+});
+http.route({
+	path: "/storefront",
+	method: "GET",
+	handler: httpAction(async (ctx, request) => {
+		const url = new URL(request.url);
+		const sellerId = url.searchParams.get("sellerId");
+		const slug = url.searchParams.get("slug");
+		if (!sellerId && !slug) {
+			return new Response(JSON.stringify({ error: "Provide sellerId or slug" }), {
+				status: 400,
+				headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+			});
+		}
+		const data = await ctx.runQuery(api.users.getStorefront, {
+			sellerId: sellerId ? (sellerId as any) : undefined,
+			slug: slug ?? undefined,
+		});
+		return new Response(JSON.stringify(data), {
+			status: 200,
+			headers: { "Content-Type": "application/json", ...CORS_HEADERS },
+		});
 	}),
 });
 
