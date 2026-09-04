@@ -1,4 +1,7 @@
 import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api.js";
 import { ArrowRight, Shield, Star, Truck, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Unauthenticated } from "convex/react";
@@ -22,6 +25,69 @@ const CATEGORY_CIRCLE: Record<string, string> = {
   fragrance: "radial-gradient(circle, #3d0010 0%, #1a0008 100%)",
   tools:     "radial-gradient(circle, #1e0040 0%, #0d001a 100%)",
 };
+
+function LiveCount({ value }: { value: number | undefined }) {
+  const [displayValue, setDisplayValue] = useState(0);
+
+  useEffect(() => {
+    if (value === undefined) return;
+    const start = displayValue;
+    const distance = value - start;
+    const startedAt = performance.now();
+    const duration = 850;
+    let frame = 0;
+
+    const animate = (now: number) => {
+      const progress = Math.min((now - startedAt) / duration, 1);
+      setDisplayValue(Math.round(start + distance * (1 - Math.pow(1 - progress, 3))));
+      if (progress < 1) frame = requestAnimationFrame(animate);
+    };
+
+    frame = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(frame);
+  }, [value]);
+
+  return <>{displayValue.toLocaleString()}</>;
+}
+
+function LiveMarketplacePulse() {
+  const stats = useQuery(((api as any).platform as any).getLiveStats) as {
+    members: number;
+    vendors: number;
+    products: number;
+    sales: number;
+  } | undefined;
+  const metrics = [
+    { value: stats?.members, label: "members" },
+    { value: stats?.vendors, label: "vendors" },
+    { value: stats?.products, label: "live products" },
+    { value: stats?.sales, label: "sales completed" },
+  ];
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 18 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.7, delay: 0.9 }}
+      className="w-full max-w-4xl mt-14 border-y border-[#C9930A]/25 bg-[#110D01]/75 px-4 py-5 sm:px-8"
+    >
+      <div className="flex items-center justify-center gap-2 mb-4 text-[10px] uppercase tracking-[0.28em] text-[#D4AF37]">
+        <span className="relative flex size-2"><span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#D4AF37] opacity-60" /><span className="relative inline-flex size-2 rounded-full bg-[#D4AF37]" /></span>
+        Live on Aurriq
+      </div>
+      <div className="grid grid-cols-2 gap-y-5 sm:grid-cols-4 sm:gap-y-0">
+        {metrics.map((metric) => (
+          <div key={metric.label} className="text-center sm:border-l sm:border-[#D4AF37]/15 first:border-l-0">
+            <p className="text-2xl sm:text-3xl font-light text-[#F0EAE0] tabular-nums">
+              {metric.value === undefined ? "-" : <LiveCount value={metric.value} />}
+            </p>
+            <p className="mt-1 text-[9px] uppercase tracking-[0.2em] text-[#B1A490]/65">{metric.label}</p>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  );
+}
 
 export default function Index() {
   // Removed the syncUser mutation and automatic unauthenticated page-mount useEffect block.
@@ -123,6 +189,8 @@ export default function Index() {
               <Link to="/seller/dashboard">Start Selling</Link>
             </Button>
           </motion.div>
+
+          <LiveMarketplacePulse />
         </div>
 
         <motion.div
