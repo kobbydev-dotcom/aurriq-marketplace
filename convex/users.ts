@@ -1,5 +1,6 @@
-import { mutation, query } from "./_generated/server";
+import { action, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
+import { api, internal } from "./_generated/api";
 
 // Haversine distance in kilometers between two coordinates.
 function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -165,6 +166,7 @@ export const storeUser = mutation({
     const authSubject = stableAuthSubject(identity);
     const providerName = identityDisplayName(identity, identityEmail);
     const providerImage = identity.picture || (identity as any).pictureUrl || undefined;
+    const accessNow = Date.now();
 
     // Prefer the auth token, but fall back to email so a login round-trip or
     // provider change cannot create a second anonymous marketplace profile.
@@ -202,6 +204,17 @@ export const storeUser = mutation({
       if (!user.image && providerImage) patch.image = providerImage;
       if (!user.tokenIdentifier || user.tokenIdentifier !== identity.tokenIdentifier) {
         patch.tokenIdentifier = identity.tokenIdentifier;
+      }
+      if (!user.lastAccessNotifiedAt || accessNow - user.lastAccessNotifiedAt > 15 * 60 * 1000) {
+        patch.lastAccessNotifiedAt = accessNow;
+        await ctx.db.insert("notifications", {
+          userId: user._id,
+          type: "account_access",
+          title: "Your Aurriq account was accessed",
+          body: "A new sign-in to your account was detected.",
+          link: "/profile",
+          isRead: false,
+        });
       }
       if (Object.keys(patch).length > 0) await ctx.db.patch(user._id, patch as any);
       return user._id;
@@ -280,6 +293,8 @@ export const updateProfile = mutation({
     paymentNetwork: v.optional(v.string()),
     paymentAccount: v.optional(v.string()),
     businessType: v.optional(v.string()),
+    serviceTypes: v.optional(v.array(v.string())),
+    customServiceDescription: v.optional(v.string()),
     notifyEmail: v.optional(v.string()),
     avatarStorageId: v.optional(v.string()),
     locationLabel: v.optional(v.string()),
@@ -334,6 +349,8 @@ export const updateProfile = mutation({
     if (typeof args.paymentNetwork === "string") patch.paymentNetwork = args.paymentNetwork;
     if (typeof args.paymentAccount === "string") patch.paymentAccount = args.paymentAccount;
     if (typeof args.businessType === "string") patch.businessType = args.businessType;
+    if (Array.isArray(args.serviceTypes)) patch.serviceTypes = args.serviceTypes.map((service) => service.trim()).filter(Boolean);
+    if (typeof args.customServiceDescription === "string") patch.customServiceDescription = args.customServiceDescription.trim();
     if (typeof args.notifyEmail === "string") patch.notifyEmail = args.notifyEmail.trim();
     if (typeof args.avatarStorageId === "string") patch.avatarStorageId = args.avatarStorageId;
     if (typeof args.locationLabel === "string") patch.locationLabel = args.locationLabel.trim();
@@ -349,6 +366,21 @@ export const updateProfile = mutation({
     }
 
     return true;
+  },
+});
+
+export const sendPasswordResetNotice = action({
+  args: {},
+  handler: async (ctx) => {
+    const user: any = await ctx.runQuery(api.users.current, {});
+    if (!user?.email) throw new Error("No login email is available for this account");
+    if (user.phone) {
+      await ctx.runAction(internal.sms.sendSMS, {
+        to: user.phone,
+        message: "Aurriq: A password reset code was requested for your account. Check your login email. If this was not you, contact support.",
+      });
+    }
+    return { email: user.email, phoneNotified: Boolean(user.phone) };
   },
 });
 

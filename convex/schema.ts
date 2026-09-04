@@ -23,6 +23,8 @@ export default defineSchema({
     paymentAccount: v.optional(v.string()),
     // Seller business type (salon, barbershop, nail tech, etc.) — shown to buyers.
     businessType: v.optional(v.string()),
+    serviceTypes: v.optional(v.array(v.string())),
+    customServiceDescription: v.optional(v.string()),
     // Optional email for order/notification emails (falls back to account email).
     notifyEmail: v.optional(v.string()),
     // Convex storage id for an uploaded avatar (resolved to a URL at query time).
@@ -44,6 +46,7 @@ export default defineSchema({
     deletionRequestedAt: v.optional(v.number()),
     deletionScheduledFor: v.optional(v.number()),
     isPendingDeletion: v.optional(v.boolean()),
+    lastAccessNotifiedAt: v.optional(v.number()),
   })
   .index("by_token", ["tokenIdentifier"])
   .index("by_auth_subject", ["authSubject"])

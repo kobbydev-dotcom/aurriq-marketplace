@@ -1,10 +1,11 @@
 ﻿import { useState, useEffect, useRef } from "react";
-import { useQuery, useMutation } from "convex/react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../../../convex/_generated/api";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { User, Mail, Shield, Camera, ArrowLeft, Loader2, Phone, Bell, Store, MapPin, Crosshair, AlertTriangle, Trash2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
@@ -24,6 +25,17 @@ const BUSINESS_TYPES = [
   { value: "other", label: "Other beauty service" },
 ];
 
+const SERVICE_OPTIONS = [
+  { value: "hair", label: "Hair styling" },
+  { value: "barbering", label: "Barbering" },
+  { value: "nails", label: "Nails" },
+  { value: "lashes", label: "Lashes" },
+  { value: "makeup", label: "Makeup" },
+  { value: "skincare", label: "Skincare" },
+  { value: "spa", label: "Spa / wellness" },
+  { value: "braiding", label: "Braiding" },
+];
+
 export default function ProfilePage() {
   const navigate = useNavigate();
   const { signIn, signOut } = useAuthActions();
@@ -35,6 +47,7 @@ export default function ProfilePage() {
   const scheduleDeletion = useMutation((api as any).accountDeletion.scheduleDeletion);
   const reactivateAccount = useMutation((api as any).accountDeletion.reactivateAccount);
   const purgeImmediately = useMutation((api as any).accountDeletion.purgeImmediately);
+  const sendPasswordResetNotice = useAction((api as any).users.sendPasswordResetNotice);
   const generateAvatarUploadUrl = useMutation(api.users.generateAvatarUploadUrl);
   const avatarUrl = useQuery(
     api.users.resolveAvatarUrl,
@@ -45,6 +58,8 @@ export default function ProfilePage() {
   const [phone, setPhone] = useState("");
   const [notifyEmail, setNotifyEmail] = useState("");
   const [businessType, setBusinessType] = useState("");
+  const [serviceTypes, setServiceTypes] = useState<string[]>([]);
+  const [customServiceDescription, setCustomServiceDescription] = useState("");
   const [locationLabel, setLocationLabel] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationShared, setLocationShared] = useState(false);
@@ -57,6 +72,10 @@ export default function ProfilePage() {
   const [deletionMode, setDeletionMode] = useState<"scheduled" | "immediate">("scheduled");
   const [deletionPasswords, setDeletionPasswords] = useState(["", "", ""]);
   const [deleting, setDeleting] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [resetSent, setResetSent] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -73,6 +92,8 @@ export default function ProfilePage() {
       setPhone(user.phone ?? "");
       setNotifyEmail((user as any).notifyEmail ?? "");
       setBusinessType((user as any).businessType ?? "");
+      setServiceTypes((user as any).serviceTypes ?? []);
+      setCustomServiceDescription((user as any).customServiceDescription ?? "");
       setLocationLabel((user as any).locationLabel ?? "");
       setLocationShared((user as any).locationShared ?? false);
       setDoabookproSlug((user as any).doabookproSlug ?? "");
@@ -125,6 +146,8 @@ export default function ProfilePage() {
         phone: phone.trim() || undefined,
         notifyEmail: notifyEmail.trim() || undefined,
         businessType: businessType || undefined,
+        serviceTypes,
+        customServiceDescription: customServiceDescription.trim() || undefined,
         locationLabel: locationLabel.trim() || undefined,
         latitude: coords?.lat,
         longitude: coords?.lng,
@@ -160,6 +183,43 @@ export default function ProfilePage() {
     } finally {
       setUploadingAvatar(false);
       if (avatarInputRef.current) avatarInputRef.current.value = "";
+    }
+  };
+
+  const requestPasswordReset = async () => {
+    if (!user?.email) {
+      toast.error("Your login email is unavailable. Please contact support.");
+      return;
+    }
+    try {
+      await sendPasswordResetNotice({});
+      await signIn("password", { email: user.email, flow: "reset" });
+      setResetSent(true);
+      toast.success(phone ? "Reset code sent to your email and a notice was sent by SMS." : "Reset code sent to your login email.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Unable to send the reset code.");
+    }
+  };
+
+  const completePasswordReset = async () => {
+    if (!resetCode.trim() || newPassword.length < 6) {
+      toast.error("Enter the code and a password with at least 6 characters.");
+      return;
+    }
+    try {
+      await signIn("password", {
+        email: user?.email,
+        flow: "reset-verification",
+        code: resetCode.trim(),
+        newPassword,
+      });
+      setResetOpen(false);
+      setResetSent(false);
+      setResetCode("");
+      setNewPassword("");
+      toast.success("Your password has been reset successfully.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "That reset code is invalid or expired.");
     }
   };
 
@@ -358,6 +418,25 @@ export default function ProfilePage() {
                 <p className="text-xs text-muted-foreground">
                   Buyers will see a badge (e.g. "Salon Owner") on your products — salon owners get priority placement with our DOABookPro booking platform.
                 </p>
+                <Label className="pt-2">What services do you offer?</Label>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                  {SERVICE_OPTIONS.map((service) => (
+                    <label key={service.value} className="flex items-center gap-2 rounded-md border border-border px-2.5 py-2 text-xs cursor-pointer hover:border-primary/50">
+                      <input
+                        type="checkbox"
+                        checked={serviceTypes.includes(service.value)}
+                        onChange={(event) => setServiceTypes((current) => event.target.checked ? [...new Set([...current, service.value])] : current.filter((value) => value !== service.value))}
+                      />
+                      {service.label}
+                    </label>
+                  ))}
+                </div>
+                <Textarea
+                  placeholder="Add another service or describe what you do..."
+                  value={customServiceDescription}
+                  onChange={(event) => setCustomServiceDescription(event.target.value)}
+                  maxLength={500}
+                />
               </div>
 
               <div className="space-y-2">
@@ -455,12 +534,33 @@ export default function ProfilePage() {
                   <p className="font-medium">Password</p>
                   <p className="text-sm text-muted-foreground">Last updated 3 months ago</p>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => toast.error("Password reset link sent to email")}>
-                  Reset
+                <Button variant="outline" size="sm" onClick={() => setResetOpen(true)}>
+                  Reset password
                 </Button>
               </div>
             </CardContent>
           </Card>
+
+          <Dialog open={resetOpen} onOpenChange={setResetOpen}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Reset your password</DialogTitle>
+                <DialogDescription>We will send a secure reset code to your login email{phone ? " and an SMS notice to your profile phone" : ""}.</DialogDescription>
+              </DialogHeader>
+              {!resetSent ? (
+                <div className="space-y-4">
+                  <p className="text-sm text-muted-foreground">Your login email is <strong>{user?.email}</strong>.</p>
+                  <Button onClick={requestPasswordReset} className="w-full">Send reset code</Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <Input placeholder="Reset code from email" value={resetCode} onChange={(event) => setResetCode(event.target.value)} />
+                  <Input type="password" placeholder="New password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />
+                  <Button onClick={completePasswordReset} className="w-full">Save new password</Button>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
 
           <Card className="border-destructive/40">
             <CardHeader>
