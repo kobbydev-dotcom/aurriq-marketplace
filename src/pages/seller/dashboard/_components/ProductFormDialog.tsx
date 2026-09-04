@@ -47,8 +47,14 @@ const schema = z
     promoPrice: z.coerce.number().optional(),
     stockQuantity: z.coerce.number().int().min(0, "Stock cannot be negative"),
     lowStockThreshold: z.coerce.number().int().min(1, "Set a minimum low-stock alert number"),
+    paymentMode: z.enum(["momo", "cod", "negotiable", "partial"]).default("momo"),
+    depositPercent: z.coerce.number().int().min(1).max(100).optional(),
     tags: z.string().optional(),
   })
+  .refine(
+    (data) => data.paymentMode !== "partial" || (data.depositPercent !== undefined && data.depositPercent >= 1 && data.depositPercent <= 100),
+    { message: "Set the deposit percentage buyers pay upfront", path: ["depositPercent"] }
+  )
   .refine(
     (data) =>
       data.promoPrice === undefined ||
@@ -90,15 +96,20 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           promoPrice: editProduct.promoPrice,
           stockQuantity: editProduct.stockQuantity,
           lowStockThreshold: editProduct.lowStockThreshold,
+          paymentMode: ((editProduct as any).paymentOptions?.mode ?? "momo") as FormValues["paymentMode"],
+          depositPercent: (editProduct as any).paymentOptions?.percent ?? 50,
           tags: editProduct.tags?.join(", ") ?? "",
         }
       : {
           stockQuantity: 0,
           lowStockThreshold: 5,
+          paymentMode: "momo",
+          depositPercent: 50,
         },
   });
 
   const category = watch("category");
+  const paymentMode = watch("paymentMode");
 
   // Media uploads: track selected images/videos (existing URL or Convex storage id) in state.
   type MediaItem = { value: string; previewUrl: string };
@@ -183,6 +194,11 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
             .filter(Boolean)
         : [];
 
+      const paymentOptions = {
+        mode: data.paymentMode,
+        percent: data.paymentMode === "partial" ? data.depositPercent : undefined,
+      };
+
       if (editProduct) {
         await updateProduct({
           productId: editProduct._id,
@@ -197,6 +213,7 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           images,
           videos,
           tags,
+          paymentOptions,
         });
         toast.success("Product updated successfully");
       } else {
@@ -212,6 +229,7 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           images,
           videos,
           tags,
+          paymentOptions,
         });
         toast.success("Product listed successfully!");
       }
@@ -311,6 +329,47 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
               <Input type="number" placeholder="Leave blank if no promo" step="0.01" {...register("promoPrice")} />
               {errors.promoPrice && <p className="text-destructive text-xs">{errors.promoPrice.message}</p>}
             </div>
+          </div>
+
+          {/* Payment options */}
+          <div className="space-y-2">
+            <Label>How do you want to be paid? *</Label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {([
+                { value: "momo", label: "Online / MoMo (strictly)", desc: "Buyer pays in full through Aurriq's secure checkout before you deliver." },
+                { value: "cod", label: "Cash on Delivery", desc: "Buyer pays in cash when the item is delivered." },
+                { value: "negotiable", label: "Negotiable", desc: "You and the buyer agree the price & payment method directly." },
+                { value: "partial", label: "Deposit + Balance", desc: "Buyer pays a deposit online now, and the rest on delivery." },
+              ] as const).map((opt) => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => setValue("paymentMode", opt.value, { shouldValidate: true })}
+                  className={cn(
+                    "rounded-xl border px-3.5 py-3 text-left transition-colors cursor-pointer",
+                    paymentMode === opt.value ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"
+                  )}
+                >
+                  <p className="text-sm font-medium">{opt.label}</p>
+                  <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">{opt.desc}</p>
+                </button>
+              ))}
+            </div>
+            {paymentMode === "partial" && (
+              <div className="space-y-1.5 pt-1">
+                <Label>Deposit percentage (%) *</Label>
+                <Input type="number" min={1} max={100} placeholder="e.g. 30" {...register("depositPercent")} />
+                <p className="text-[11px] text-muted-foreground">
+                  Buyer pays this % online now; the remaining balance is paid on delivery.
+                </p>
+                {errors.depositPercent && <p className="text-destructive text-xs">{errors.depositPercent.message}</p>}
+              </div>
+            )}
+            {paymentMode === "momo" && (
+              <p className="text-[11px] text-muted-foreground flex items-center gap-1">
+                <Info className="size-3" /> Electronic payments are processed only through Aurriq's secure checkout.
+              </p>
+            )}
           </div>
 
           {/* Stock */}

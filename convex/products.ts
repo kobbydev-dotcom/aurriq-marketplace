@@ -152,6 +152,7 @@ export const createProduct = mutation({
     images: v.array(v.string()),
     videos: v.optional(v.array(v.string())),
     tags: v.array(v.string()),
+    paymentOptions: v.optional(v.object({ mode: v.string(), percent: v.optional(v.number()) })),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -193,6 +194,7 @@ export const createProduct = mutation({
       videos: args.videos ?? [],
       tags: args.tags,
       variants: args.variants,
+      paymentOptions: args.paymentOptions ?? { mode: "momo" },
 
       // Hardcoded tracking parameters required by schema initialization:
       sellerId: user._id,
@@ -269,6 +271,7 @@ export const updateProduct = mutation({
     images: v.optional(v.array(v.string())),
     videos: v.optional(v.array(v.string())),
     tags: v.optional(v.array(v.string())),
+    paymentOptions: v.optional(v.object({ mode: v.string(), percent: v.optional(v.number()) })),
     isActive: v.optional(v.boolean()),
   },
   handler: async (ctx, args) => {
@@ -308,6 +311,7 @@ export const updateProduct = mutation({
       imageUrl: nextImages[0] ?? product.imageUrl ?? "",
       tags: args.tags ?? product.tags,
       variants: nextVariants,
+      paymentOptions: (args as any).paymentOptions ?? (product as any).paymentOptions,
       isActive: typeof args.isActive === "boolean" ? args.isActive : product.isActive,
       lowStockAlertSent: nextStock > nextThreshold ? false : product.lowStockAlertSent,
       outOfStockAlertSent: nextStock > 0 ? false : product.outOfStockAlertSent,

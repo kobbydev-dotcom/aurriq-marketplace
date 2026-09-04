@@ -1,71 +1,156 @@
-import { internalAction, internalMutation } from "./_generated/server";
+import { internalAction, internalMutation, mutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 
-export const initiateMomoCharge = internalAction({
+// ---------------------------------------------------------------------------
+// Paystack charge (MoMo / card) — all electronic payments run through Aurriq.
+// ---------------------------------------------------------------------------
+
+const NETWORK_TO_PAYSTACK: Record<string, string> = {
+  mtn: "MTN",
+  telecel: "VOD",
+  vodafone: "VOD",
+  airteltigo: "ATL",
+  airtel: "ATL",
+  tigo: "ATL",
+};
+
+export const initiatePaystackCharge = internalAction({
   args: {
     paymentReference: v.string(),
-    amount: v.number(),
+    amount: v.number(), // major units (GHS)
+    email: v.string(),
     phone: v.optional(v.string()),
     network: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const endpoint = process.env.MOMO_COLLECTION_URL;
-
-    if (!endpoint) {
-      await ctx.runMutation((internal as any).payments.applyPaymentWebhook, {
+    const secret = process.env.PAYSTACK_SECRET_KEY;
+    if (!secret) {
+      await ctx.runMutation(internal.payments.applyPaymentWebhook, {
         paymentReference: args.paymentReference,
         status: "pending",
-        providerPayload: { note: "MOMO_COLLECTION_URL not configured" },
+        providerPayload: { note: "PAYSTACK_SECRET_KEY not configured" },
       });
       return;
     }
 
-    const payload = {
-      amount: Number(args.amount.toFixed(2)),
-      phone: args.phone,
-      network: args.network,
-      currency: process.env.MOMO_CURRENCY ?? "GHS",
-      reference: args.paymentReference,
-      callbackUrl: process.env.MOMO_CALLBACK_URL,
-      description: "Aurriq marketplace checkout",
-    };
+    const amountMinor = Math.round(args.amount * 100); // Paystack expects pesewas
+    const isMomo = !!(args.phone && args.network);
 
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-    if (process.env.MOMO_API_KEY) headers.Authorization = `Bearer ${process.env.MOMO_API_KEY}`;
+    const body: Record<string, unknown> = isMomo
+      ? {
+          amount: amountMinor,
+          email: args.email,
+          currency: "GHS",
+          reference: args.paymentReference,
+          mobile_money: {
+            phone: args.phone,
+            provider: NETWORK_TO_PAYSTACK[(args.network ?? "").toLowerCase()] ?? "MTN",
+          },
+        }
+      : {
+          amount: amountMinor,
+          email: args.email,
+          currency: "GHS",
+          reference: args.paymentReference,
+        };
+
+    const endpoint = isMomo
+      ? "https://api.paystack.co/charge"
+      : "https://api.paystack.co/transaction/initialize";
 
     const response = await fetch(endpoint, {
       method: "POST",
-      headers,
-      body: JSON.stringify(payload),
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify(body),
     });
 
-    const responseText = await response.text();
-    let responseBody: unknown = responseText;
-    try {
-      responseBody = JSON.parse(responseText);
-    } catch {
-      // Keep plain text payload if provider did not return JSON
-    }
+    const json: any = await response.json().catch(() => ({}));
 
-    if (!response.ok) {
-      await ctx.runMutation((internal as any).payments.applyPaymentWebhook, {
+    if (!response.ok || json?.status === false) {
+      await ctx.runMutation(internal.payments.applyPaymentWebhook, {
         paymentReference: args.paymentReference,
         status: "failed",
-        providerPayload: { payload, response: responseBody },
+        providerPayload: { request: body, response: json },
       });
       return;
     }
 
-    await ctx.runMutation((internal as any).payments.applyPaymentWebhook, {
+    // Card flows return an authorization_url the buyer must be redirected to.
+    const authorizationUrl = json?.data?.authorization_url as string | undefined;
+    await ctx.runMutation(internal.payments.applyPaymentWebhook, {
       paymentReference: args.paymentReference,
       status: "pending",
-      providerPayload: { payload, response: responseBody },
+      providerPayload: { request: { ...body, email: "***" }, response: json },
+    });
+    if (authorizationUrl) {
+      await ctx.runMutation(internal.payments.setPaymentAuthorizationUrl, {
+        paymentReference: args.paymentReference,
+        authorizationUrl,
+      });
+    }
+  },
+});
+
+// Store the Paystack authorization URL on the order(s) so the client can redirect.
+export const setPaymentAuthorizationUrl = internalMutation({
+  args: { paymentReference: v.string(), authorizationUrl: v.string() },
+  handler: async (ctx, args) => {
+    const orders = await ctx.db
+      .query("orders")
+      .withIndex("by_payment_reference", (q) => q.eq("paymentReference", args.paymentReference))
+      .collect();
+    await Promise.all(
+      orders.map((order) => ctx.db.patch(order._id, { authorizationUrl: args.authorizationUrl }))
+    );
+  },
+});
+
+// Public mutation: buyer taps "I've paid" → re-check status with Paystack.
+export const verifyPaymentByReference = mutation({
+  args: { paymentReference: v.string() },
+  handler: async (ctx, args): Promise<{ status: string; paid: boolean }> => {
+    const orders = await ctx.db
+      .query("orders")
+      .withIndex("by_payment_reference", (q) => q.eq("paymentReference", args.paymentReference))
+      .collect();
+    if (orders.length === 0) return { status: "not_found", paid: false };
+    if (orders.every((o) => o.paymentStatus === "paid")) return { status: "success", paid: true };
+
+    await ctx.scheduler.runAfter(0, internal.payments.verifyPaystackTransaction, {
+      paymentReference: args.paymentReference,
+    });
+    return { status: "verifying", paid: false };
+  },
+});
+
+export const verifyPaystackTransaction = internalAction({
+  args: { paymentReference: v.string() },
+  handler: async (ctx, args) => {
+    const secret = process.env.PAYSTACK_SECRET_KEY;
+    if (!secret) return;
+    const res = await fetch(
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(args.paymentReference)}`,
+      { headers: { Authorization: `Bearer ${secret}` } }
+    );
+    const json: any = await res.json().catch(() => ({}));
+    const status = String(json?.data?.status ?? "").toLowerCase();
+    const normalized = status === "success" ? "success" : status === "failed" ? "failed" : "pending";
+    await ctx.runMutation(internal.payments.applyPaymentWebhook, {
+      paymentReference: args.paymentReference,
+      status: normalized,
+      transactionId: json?.data?.id ? String(json.data.id) : undefined,
+      providerPayload: json,
     });
   },
 });
+
+// ---------------------------------------------------------------------------
+// Shared settlement logic — called by webhooks / verify once payment resolves.
+// ---------------------------------------------------------------------------
 
 export const applyPaymentWebhook = internalMutation({
   args: {
@@ -137,14 +222,26 @@ export const applyPaymentWebhook = internalMutation({
         totalRevenue: (product.totalRevenue ?? 0) + revenue,
       });
 
+      // Partial-payment products: this online charge settles the deposit only;
+      // the balance is collected on delivery.
+      const isPartial =
+        order.depositAmount != null && order.balanceAmount != null && order.balanceAmount > 0;
+
       await ctx.db.patch(order._id, {
         status: "pending",
         paymentStatus: "paid",
+        depositPaid: true,
+        balancePaid: isPartial ? false : true,
         paymentProviderTxnId: args.transactionId,
       });
 
       await ctx.scheduler.runAfter(0, internal.inventory.checkAndSendAlerts, {
         productId: order.productId,
+      });
+
+      // Send the buyer a receipt via SMS + email.
+      await ctx.scheduler.runAfter(0, internal.receipts.sendOrderReceipt, {
+        orderId: order._id,
       });
     }
   },

@@ -36,6 +36,7 @@ type CartItem = {
     stockQuantity: number;
     isActive: boolean;
     seller?: { name?: string } | null;
+    paymentOptions?: { mode: string; percent?: number } | null;
   } | null;
 };
 
@@ -144,19 +145,46 @@ function CheckoutDialog({
   open,
   onClose,
   total,
+  items,
 }: {
   open: boolean;
   onClose: () => void;
   total: number;
+  items: CartItem[];
 }) {
   const placeOrder = useMutation((api.orders as any).placeOrder) as any;
   const navigate = useNavigate();
   const [phone, setPhone] = useState("");
   const [note, setNote] = useState("");
+  const [receiptEmail, setReceiptEmail] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("mobile_money");
   const [paymentNetwork, setPaymentNetwork] = useState("mtn");
   const [paymentAccount, setPaymentAccount] = useState("");
   const [loading, setLoading] = useState(false);
+
+  // Determine effective payment mode per item (default: online/momo).
+  const modeOf = (p: CartItem["product"]) => {
+    const m = p?.paymentOptions?.mode;
+    return m === "cod" || m === "negotiable" || m === "partial" ? m : "momo";
+  };
+  const hasOnline = items.some((i) => {
+    const m = modeOf(i.product);
+    return m === "momo" || m === "partial";
+  });
+
+  // Amount due online right now (full for momo, deposit % for partial).
+  const dueNow = items.reduce((sum, i) => {
+    const p = i.product;
+    if (!p) return sum;
+    const price = (p.promoPrice ?? p.originalPrice) * i.quantity;
+    const m = modeOf(p);
+    if (m === "momo") return sum + price;
+    if (m === "partial") {
+      const pct = Math.min(100, Math.max(1, p.paymentOptions?.percent ?? 50));
+      return sum + Math.round(price * (pct / 100) * 100) / 100;
+    }
+    return sum; // cod / negotiable → nothing online
+  }, 0);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -168,9 +196,10 @@ function CheckoutDialog({
         paymentMethod,
         paymentNetwork: paymentMethod === "mobile_money" ? paymentNetwork : undefined,
         paymentAccount: paymentMethod === "mobile_money" ? paymentAccount || phone || undefined : undefined,
+        receiptEmail: receiptEmail || undefined,
       });
       if (result.paymentPending) {
-        toast.success("Payment initiated. Your order is awaiting MoMo confirmation.");
+        toast.success("Payment initiated. Complete it on your phone — your receipt follows by SMS + email.");
       } else {
         toast.success(`Order placed! ${result.orderIds.length} item(s) confirmed.`);
       }
@@ -195,15 +224,57 @@ function CheckoutDialog({
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4 mt-2">
           <div className="space-y-1.5">
-            <Label htmlFor="phone">Phone number (optional)</Label>
+            <Label htmlFor="phone">Phone number (for SMS receipt)</Label>
             <Input
               id="phone"
-              placeholder="+234 800 000 0000"
+              placeholder="+233 24 000 0000"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
             />
-            <p className="text-xs text-muted-foreground">So sellers can reach you about your order</p>
           </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="receiptEmail">Email for your receipt</Label>
+            <Input
+              id="receiptEmail"
+              type="email"
+              placeholder="you@example.com"
+              value={receiptEmail}
+              onChange={(e) => setReceiptEmail(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">We'll email your receipt here after payment.</p>
+          </div>
+
+          {/* Per-item payment mode summary */}
+          <div className="space-y-1.5">
+            <Label>Payment breakdown</Label>
+            <div className="rounded-lg border border-border divide-y divide-border/50 overflow-hidden">
+              {items.map((i) => {
+                const p = i.product;
+                if (!p) return null;
+                const m = modeOf(p);
+                const price = (p.promoPrice ?? p.originalPrice) * i.quantity;
+                const label =
+                  m === "cod" ? "Cash on delivery"
+                  : m === "negotiable" ? "Negotiable with seller"
+                  : m === "partial" ? `Deposit ${Math.min(100, Math.max(1, p.paymentOptions?.percent ?? 50))}% now`
+                  : "Pay online now";
+                return (
+                  <div key={i._id} className="flex items-center justify-between px-3 py-2 text-xs">
+                    <span className="truncate pr-2">{p.name} × {i.quantity}</span>
+                    <span className="text-muted-foreground whitespace-nowrap">{label}</span>
+                  </div>
+                );
+              })}
+            </div>
+            {hasOnline && (
+              <p className="text-xs text-muted-foreground">
+                Due online now: <span className="text-primary font-semibold">{formatCurrency(dueNow)}</span>
+                {dueNow < total && <> · rest on delivery/arranged</>}
+              </p>
+            )}
+          </div>
+
+          {hasOnline && (
           <div className="space-y-1.5">
             <Label>Payment Method</Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -223,7 +294,8 @@ function CheckoutDialog({
               ))}
             </div>
           </div>
-          {paymentMethod === "mobile_money" && (
+          )}
+          {hasOnline && paymentMethod === "mobile_money" && (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Mobile Money Network</Label>
@@ -361,6 +433,7 @@ function CartPageInner() {
         open={checkoutOpen}
         onClose={() => setCheckoutOpen(false)}
         total={subtotal}
+        items={validItems}
       />
     </>
   );

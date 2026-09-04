@@ -47,6 +47,15 @@ export default defineSchema({
     brand: v.optional(v.string()),
     variants: v.optional(v.any()),
     tags: v.optional(v.array(v.string())),
+    // How the seller accepts payment for this product:
+    // "momo" = online/mobile-money via Aurriq only, "cod" = cash on delivery,
+    // "negotiable" = price/method arranged with buyer, "partial" = deposit % now, balance on delivery.
+    paymentOptions: v.optional(
+      v.object({
+        mode: v.string(),
+        percent: v.optional(v.number()),
+      })
+    ),
   }).index("by_seller", ["sellerId"]),
 
   messages: defineTable({
@@ -99,6 +108,14 @@ export default defineSchema({
     paymentReference: v.optional(v.string()),
     paymentStatus: v.optional(v.string()),
     paymentProviderTxnId: v.optional(v.string()),
+    authorizationUrl: v.optional(v.string()),
+    // Receipt + partial-payment tracking
+    receiptEmail: v.optional(v.string()),
+    depositAmount: v.optional(v.number()),
+    balanceAmount: v.optional(v.number()),
+    depositPaid: v.optional(v.boolean()),
+    balancePaid: v.optional(v.boolean()),
+    balancePaymentReference: v.optional(v.string()),
     items: v.optional(
       v.array(
         v.object({

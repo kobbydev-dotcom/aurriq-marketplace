@@ -145,11 +145,84 @@ export default function SiteHeader() {
             </DropdownMenu>
           </Authenticated>
 
-          <button className="md:hidden transition-colors" style={{ color: "rgba(240,234,224,0.5)" }} onClick={() => setMenuOpen((v) => !v)} aria-label="Toggle menu">
-            {menuOpen ? <X className="size-5" /> : <Menu className="size-5" />}
+          <button className="md:hidden transition-colors" style={{ color: "rgba(240,234,224,0.9)" }} onClick={() => setMenuOpen((v) => !v)} aria-label="Toggle menu" aria-expanded={menuOpen}>
+            {menuOpen ? <X className="size-6" /> : <Menu className="size-6" />}
           </button>
         </div>
       </div>
+
+      {/* Mobile menu panel (small screens only) */}
+      {menuOpen && (
+        <div
+          className="md:hidden border-t"
+          style={{ borderColor: "rgba(212,175,55,0.15)", background: "rgba(6,4,0,0.98)", backdropFilter: "blur(20px)" }}
+        >
+          <div className="max-w-7xl mx-auto px-6 py-4 flex flex-col gap-1" style={{ fontFamily: "'Geist', sans-serif" }}>
+            {NAV_LINKS.map((link) => (
+              <Link
+                key={link.href}
+                to={link.href}
+                onClick={() => setMenuOpen(false)}
+                className="py-2.5 text-sm tracking-wide"
+                style={{ color: location.pathname === link.href ? "#C9930A" : "rgba(240,234,224,0.85)", letterSpacing: "0.08em" }}
+              >
+                {link.label}
+              </Link>
+            ))}
+
+            <div className="my-2 border-t" style={{ borderColor: "rgba(212,175,55,0.12)" }} />
+            <p className="text-[10px] uppercase tracking-[0.22em] mb-1" style={{ color: "rgba(180,155,80,0.6)" }}>Categories</p>
+            <div className="flex flex-wrap gap-x-5 gap-y-2">
+              {CATEGORIES.map((cat) => (
+                <Link
+                  key={cat.slug}
+                  to={`/shop?category=${cat.slug}`}
+                  onClick={() => setMenuOpen(false)}
+                  className="text-xs py-1"
+                  style={{ color: "rgba(240,234,224,0.7)", letterSpacing: "0.08em" }}
+                >
+                  {cat.label}
+                </Link>
+              ))}
+            </div>
+
+            <div className="my-2 border-t" style={{ borderColor: "rgba(212,175,55,0.12)" }} />
+
+            <Unauthenticated>
+              <div onClick={() => setMenuOpen(false)} className="pt-1">
+                <SignInButton />
+              </div>
+            </Unauthenticated>
+
+            <Authenticated>
+              <button
+                onClick={() => { setMenuOpen(false); navigate("/profile"); }}
+                className="flex items-center gap-2 py-2.5 text-sm text-left"
+                style={{ color: "rgba(240,234,224,0.85)" }}
+              >
+                <User className="size-4" /> Profile
+              </button>
+              <button
+                onClick={() => { setMenuOpen(false); navigate("/seller/dashboard"); }}
+                className="flex items-center gap-2 py-2.5 text-sm text-left"
+                style={{ color: "rgba(240,234,224,0.85)" }}
+              >
+                <Store className="size-4" /> Vendor Dashboard
+              </button>
+              <button
+                onClick={async () => {
+                  setMenuOpen(false);
+                  await signOut();
+                  window.location.reload();
+                }}
+                className="flex items-center gap-2 py-2.5 text-sm text-left text-red-400"
+              >
+                <LogOut className="size-4" /> Log out
+              </button>
+            </Authenticated>
+          </div>
+        </div>
+      )}
       
       <div className="hidden md:block border-t" style={{ borderColor: "rgba(212,175,55,0.1)", height: "38px" }}>
         <div className="max-w-7xl mx-auto px-6 h-full flex items-center gap-8">

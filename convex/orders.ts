@@ -9,8 +9,9 @@ export const placeOrder = mutation({
     paymentMethod: v.optional(v.string()),
     paymentNetwork: v.optional(v.string()),
     paymentAccount: v.optional(v.string()),
+    receiptEmail: v.optional(v.string()),
   },
-  handler: async (ctx, args): Promise<{ orderIds: string[]; total: number; paymentReference?: string; paymentPending?: boolean }> => {
+  handler: async (ctx, args): Promise<{ orderIds: string[]; total: number; paymentReference?: string; paymentPending?: boolean; amountDueNow?: number }> => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Please sign in to place an order" });
 
@@ -29,17 +30,37 @@ export const placeOrder = mutation({
       throw new ConvexError({ code: "BAD_REQUEST", message: "Your cart is empty" });
     }
 
-    const orderIds: string[] = [];
-    let total = 0;
-    const isMomoCheckout = args.paymentMethod === "mobile_money";
-    const paymentReference = isMomoCheckout ? `AURRIQ-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}` : undefined;
+    // Fetch products and determine each item's effective payment mode.
+    const productMap = new Map<string, any>();
+    for (const item of cartItems) {
+      const product = await ctx.db.get(item.productId);
+      if (product) productMap.set(item.productId, product);
+    }
 
-    if (isMomoCheckout && !(args.paymentAccount || args.buyerPhone)) {
+    const effectiveMode = (product: any): string => {
+      const mode = product?.paymentOptions?.mode;
+      return mode === "momo" || mode === "cod" || mode === "negotiable" || mode === "partial" ? mode : "momo";
+    };
+
+    const anyOnline = cartItems.some((item) => {
+      const product = productMap.get(item.productId);
+      const mode = effectiveMode(product);
+      return mode === "momo" || mode === "partial";
+    });
+
+    const isOnlineCheckout = anyOnline && args.paymentMethod === "mobile_money";
+    const paymentReference = isOnlineCheckout ? `AURRIQ-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}` : undefined;
+
+    if (isOnlineCheckout && !(args.paymentAccount || args.buyerPhone)) {
       throw new ConvexError({ code: "BAD_REQUEST", message: "Provide a mobile money number to complete checkout" });
     }
 
+    const orderIds: string[] = [];
+    let total = 0;
+    let amountDueNow = 0;
+
     for (const item of cartItems) {
-      const product = await ctx.db.get(item.productId);
+      const product = productMap.get(item.productId);
       if (!product) continue;
       if (!product.isActive) {
         throw new ConvexError({ code: "BAD_REQUEST", message: `"${product.name}" is no longer available` });
@@ -55,27 +76,48 @@ export const placeOrder = mutation({
       const totalAmount = (priceAtPurchase ?? 0) * item.quantity;
       total += totalAmount;
 
+      const mode = effectiveMode(product);
+      const itemOnline = isOnlineCheckout && (mode === "momo" || mode === "partial");
+
+      // Deposit / balance split for partial products.
+      let depositAmount: number | undefined;
+      let balanceAmount: number | undefined;
+      if (mode === "partial") {
+        const pct = Math.min(100, Math.max(1, product.paymentOptions?.percent ?? 50));
+        depositAmount = Math.round(totalAmount * (pct / 100) * 100) / 100;
+        balanceAmount = Math.round((totalAmount - depositAmount) * 100) / 100;
+      }
+
+      if (itemOnline) {
+        amountDueNow += mode === "partial" ? (depositAmount ?? totalAmount) : totalAmount;
+      }
+
       const orderId = await ctx.db.insert("orders", {
-        userId: user._id,          // Added to fix the schema error
+        userId: user._id,
         buyerId: user._id,
-        sellerId: product.sellerId,// Uses the ID directly from your database product lookup
+        sellerId: product.sellerId,
         productId: item.productId,
         quantity: item.quantity,
         priceAtPurchase,
         totalAmount,
-        status: isMomoCheckout ? "awaiting_payment" : "pending",
+        status: itemOnline ? "awaiting_payment" : "pending",
         buyerPhone: args.buyerPhone,
         buyerNote: args.buyerNote,
-        paymentMethod: args.paymentMethod,
-        paymentNetwork: args.paymentNetwork,
-        paymentAccount: args.paymentAccount,
-        paymentReference,
-        paymentStatus: isMomoCheckout ? "initiated" : "not_required",
+        paymentMethod: mode === "cod" ? "cash_on_delivery" : mode === "negotiable" ? "negotiable" : args.paymentMethod,
+        paymentNetwork: itemOnline ? args.paymentNetwork : undefined,
+        paymentAccount: itemOnline ? args.paymentAccount : undefined,
+        paymentReference: itemOnline ? paymentReference : undefined,
+        paymentStatus: itemOnline ? "initiated" : "not_required",
+        receiptEmail: args.receiptEmail ?? (user as any).email,
+        depositAmount,
+        balanceAmount,
+        depositPaid: mode === "partial" ? false : undefined,
+        balancePaid: mode === "partial" ? false : undefined,
       });
       orderIds.push(orderId);
 
-      if (!isMomoCheckout) {
-        // Decrement stock immediately for non-gateway methods
+      if (!itemOnline) {
+        // Non-gateway methods settle stock immediately.
         const newStock = product.stockQuantity - item.quantity;
         await ctx.db.patch(item.productId, {
           stockQuantity: newStock,
@@ -83,9 +125,13 @@ export const placeOrder = mutation({
           totalRevenue: product.totalRevenue + totalAmount,
         });
 
-        // Trigger SMS alerts if needed
         await ctx.scheduler.runAfter(0, internal.inventory.checkAndSendAlerts, {
           productId: item.productId,
+        });
+
+        // COD / negotiable orders get a receipt right away (nothing paid yet).
+        await ctx.scheduler.runAfter(0, (internal as any).receipts.sendOrderReceipt, {
+          orderId,
         });
       }
     }
@@ -93,16 +139,17 @@ export const placeOrder = mutation({
     // Clear cart
     await Promise.all(cartItems.map((item) => ctx.db.delete(item._id)));
 
-    if (isMomoCheckout && paymentReference) {
-      await ctx.scheduler.runAfter(0, (internal as any).payments.initiateMomoCharge, {
+    if (isOnlineCheckout && paymentReference) {
+      await ctx.scheduler.runAfter(0, (internal as any).payments.initiatePaystackCharge, {
         paymentReference,
-        amount: total,
+        amount: amountDueNow > 0 ? amountDueNow : total,
+        email: args.receiptEmail ?? (user as any).email ?? "customer@aurriq.com",
         phone: args.paymentAccount || args.buyerPhone,
         network: args.paymentNetwork,
       });
     }
 
-    return { orderIds, total, paymentReference, paymentPending: isMomoCheckout };
+    return { orderIds, total, paymentReference, paymentPending: isOnlineCheckout, amountDueNow };
   },
 });
 
