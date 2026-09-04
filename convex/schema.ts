@@ -33,6 +33,13 @@ export default defineSchema({
     locationShared: v.optional(v.boolean()),
     // Link to the seller's DOABookPro booking page (subdomain/slug) for the booking↔shop loop.
     doabookproSlug: v.optional(v.string()),
+    // Separate Aurriq marketplace vendor entitlement. This is intentionally
+    // independent from any DOABookPro booking subscription.
+    marketplaceSubscriptionStatus: v.optional(v.string()),
+    marketplacePlan: v.optional(v.string()),
+    marketplaceSubscriptionSource: v.optional(v.string()),
+    marketplacePaidUntil: v.optional(v.number()),
+    marketplacePaymentReference: v.optional(v.string()),
   })
   .index("by_token", ["tokenIdentifier"])
   .index("email", ["email"]),

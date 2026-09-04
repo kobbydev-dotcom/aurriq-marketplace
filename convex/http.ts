@@ -68,20 +68,38 @@ http.route({
 		const body = JSON.parse(raw);
 		if (body?.event === "charge.success") {
 			const data = body.data ?? {};
-			await ctx.runMutation(internal.payments.applyPaymentWebhook, {
-				paymentReference: String(data.reference),
-				status: "success",
-				transactionId: data.id ? String(data.id) : undefined,
-				providerPayload: body,
-			});
+			const paymentReference = String(data.reference ?? "");
+			if (paymentReference.startsWith("AURRIQ-VENDOR-")) {
+				await ctx.runMutation(internal.payments.applyMarketplaceSubscription, {
+					paymentReference,
+					status: "success",
+					transactionId: data.id ? String(data.id) : undefined,
+				});
+			} else {
+				await ctx.runMutation(internal.payments.applyPaymentWebhook, {
+					paymentReference,
+					status: "success",
+					transactionId: data.id ? String(data.id) : undefined,
+					providerPayload: body,
+				});
+			}
 		} else if (body?.event === "charge.failed") {
 			const data = body.data ?? {};
-			await ctx.runMutation(internal.payments.applyPaymentWebhook, {
-				paymentReference: String(data.reference),
-				status: "failed",
-				transactionId: data.id ? String(data.id) : undefined,
-				providerPayload: body,
-			});
+			const paymentReference = String(data.reference ?? "");
+			if (paymentReference.startsWith("AURRIQ-VENDOR-")) {
+				await ctx.runMutation(internal.payments.applyMarketplaceSubscription, {
+					paymentReference,
+					status: "failed",
+					transactionId: data.id ? String(data.id) : undefined,
+				});
+			} else {
+				await ctx.runMutation(internal.payments.applyPaymentWebhook, {
+					paymentReference,
+					status: "failed",
+					transactionId: data.id ? String(data.id) : undefined,
+					providerPayload: body,
+				});
+			}
 		}
 
 		return new Response("ok", { status: 200 });

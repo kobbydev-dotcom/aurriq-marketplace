@@ -39,6 +39,7 @@ import type { Doc, Id } from "../../../../../convex/_generated/dataModel.d.ts";
 import SellerMessagesTab from "@/pages/seller/dashboard/_components/SellerMessagesTab.tsx";
 import AnalyticsTab from "@/pages/seller/dashboard/_components/AnalyticsTab.tsx";
 import SellerRfqsTab from "@/pages/seller/dashboard/_components/SellerRfqsTab.tsx";
+import VendorSubscriptionDialog from "@/pages/seller/dashboard/_components/VendorSubscriptionDialog.tsx";
 import {
   Select,
   SelectContent,
@@ -548,6 +549,7 @@ export default function SellerDashboardInner() {
   const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState("products");
   const [selectedBuyerId, setSelectedBuyerId] = useState<Id<"users"> | null>(null);
+  const [subscriptionOpen, setSubscriptionOpen] = useState(false);
 
   const handleEdit = (p: Doc<"products">) => {
     setEditTarget(p);
@@ -580,12 +582,7 @@ export default function SellerDashboardInner() {
   };
 
   const handleBecomeSeller = async () => {
-    try {
-      await updateProfile({ role: "seller", isSeller: true });
-      toast.success("You're now a seller on Aurriq!");
-    } catch {
-      toast.error("Something went wrong");
-    }
+    setSubscriptionOpen(true);
   };
 
   const handleSavePaymentSettings = async (payload: {
@@ -644,6 +641,11 @@ export default function SellerDashboardInner() {
         <Button size="lg" onClick={handleBecomeSeller} className="rounded-full px-10">
           Activate Seller Account
         </Button>
+        <VendorSubscriptionDialog
+          open={subscriptionOpen}
+          onOpenChange={setSubscriptionOpen}
+          isDoaBookProPartner={Boolean((currentUser as any)?.doabookproSlug)}
+        />
       </div>
     );
   }
