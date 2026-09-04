@@ -563,7 +563,9 @@ export default function SellerDashboardInner() {
   }, [currentUser?.role]);
 
   useEffect(() => {
-    const reference = searchParams.get("reference") || localStorage.getItem("aurriq_pending_vendor_payment");
+    const reference = searchParams.get("reference")
+      || localStorage.getItem("aurriq_pending_vendor_payment")
+      || (currentUser as any)?.marketplacePaymentReference;
     if (!reference || currentUser === undefined || currentUser?.role === "seller" || recoveryAttempted.current) return;
 
     recoveryAttempted.current = true;

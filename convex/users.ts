@@ -133,18 +133,12 @@ export const storeUser = mutation({
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
 
-    const name = user?.name ?? identity.name ?? "Anonymous Buyer";
-    const imageUrl = identity.picture || (identity as any).pictureUrl || undefined;
-
     if (user !== null) {
-      if (user.name !== name || user.image !== imageUrl) {
-        await ctx.db.patch(user._id, {
-          name,
-          image: imageUrl,
-        });
-      }
       return user._id;
     }
+
+    const name = identity.name ?? "Anonymous Buyer";
+    const imageUrl = identity.picture || (identity as any).pictureUrl || undefined;
 
     return await ctx.db.insert("users", {
       tokenIdentifier: identity.tokenIdentifier!,
