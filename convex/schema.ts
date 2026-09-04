@@ -44,6 +44,7 @@ export default defineSchema({
   })
   .index("by_token", ["tokenIdentifier"])
   .index("by_auth_subject", ["authSubject"])
+  .index("by_marketplace_payment_reference", ["marketplacePaymentReference"])
   .index("email", ["email"]),
 
   products: defineTable({

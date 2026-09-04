@@ -130,16 +130,22 @@ export const applyMarketplaceSubscription = internalMutation({
     transactionId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const users = await ctx.db.query("users").collect();
-    const user: any = users.find((candidate: any) => candidate.marketplacePaymentReference === args.paymentReference);
-    if (!user) return;
+    const user: any = await ctx.db
+      .query("users")
+      .withIndex("by_marketplace_payment_reference", (q) => q.eq("marketplacePaymentReference", args.paymentReference))
+      .unique();
+    if (!user) {
+      throw new Error(`Marketplace subscription user not found for payment reference ${args.paymentReference}`);
+    }
     if (args.status === "failed") {
       await ctx.db.patch(user._id, { marketplaceSubscriptionStatus: "payment_failed" });
       return;
     }
 
     const plan = marketplacePlan(user.marketplacePlan ?? "", user.marketplaceSubscriptionSource ?? "direct");
-    if (!plan) return;
+    if (!plan) {
+      throw new Error(`Marketplace subscription plan not found for payment reference ${args.paymentReference}`);
+    }
     const currentUntil = typeof user.marketplacePaidUntil === "number" && user.marketplacePaidUntil > Date.now()
       ? user.marketplacePaidUntil
       : Date.now();
