@@ -436,3 +436,40 @@ export const verifyMarketplaceTransaction = internalAction({
     });
   },
 });
+
+// Recovery path for a successful Paystack payment whose browser return/login
+// flow lost the pending reference. Requires the signed-in account email to
+// match Paystack's transaction customer email before activating access.
+export const recoverMarketplaceSubscription = action({
+  args: { paymentReference: v.string() },
+  handler: async (ctx, args) => {
+    const user: any = await ctx.runQuery(api.users.current, {});
+    if (!user?.email) throw new Error("Please sign in before recovering payment");
+    if (!args.paymentReference.startsWith("AURRIQ-VENDOR-")) {
+      throw new Error("That is not an Aurriq vendor payment reference");
+    }
+
+    const secret = process.env.PAYSTACK_SECRET_KEY;
+    if (!secret) throw new Error("Payment verification is not configured");
+    const response = await fetch(
+      `https://api.paystack.co/transaction/verify/${encodeURIComponent(args.paymentReference)}`,
+      { headers: { Authorization: `Bearer ${secret}` } }
+    );
+    const payload: any = await response.json().catch(() => ({}));
+    const customerEmail = String(payload?.data?.customer?.email ?? "").toLowerCase();
+    const accountEmail = String(user.email).toLowerCase();
+    if (customerEmail && customerEmail !== accountEmail) {
+      throw new Error("This payment belongs to a different email account");
+    }
+    if (String(payload?.data?.status ?? "").toLowerCase() !== "success") {
+      throw new Error("Paystack has not marked this payment successful yet");
+    }
+
+    await ctx.runMutation(internal.payments.applyMarketplaceSubscription, {
+      paymentReference: args.paymentReference,
+      status: "success",
+      transactionId: payload?.data?.id ? String(payload.data.id) : undefined,
+    });
+    return { recovered: true };
+  },
+});
