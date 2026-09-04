@@ -68,7 +68,7 @@ export const startMarketplaceSubscription = action({
         email: user.email ?? "vendor@aurriq.com",
         currency: "GHS",
         reference,
-        callback_url: `${process.env.APP_URL ?? "https://aurriq-marketplace-live-a04ea8311137.herokuapp.com"}/seller/dashboard?subscription=success&reference=${encodeURIComponent(reference)}`,
+        callback_url: `${process.env.AURRIQ_PUBLIC_URL ?? "https://aurriq.doabookpro.com"}/seller/dashboard?subscription=success&reference=${encodeURIComponent(reference)}`,
         metadata: {
           type: "aurriq_marketplace_vendor_subscription",
           source,

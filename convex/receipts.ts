@@ -2,9 +2,9 @@ import { internalAction, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 
-const DASHBOARD_URL = process.env.APP_URL
-  ? `${process.env.APP_URL}/seller/dashboard`
-  : "https://aurriq-marketplace-live-a04ea8311137.herokuapp.com/seller/dashboard";
+const DASHBOARD_URL = process.env.AURRIQ_PUBLIC_URL
+  ? `${process.env.AURRIQ_PUBLIC_URL}/seller/dashboard`
+  : "https://aurriq.doabookpro.com/seller/dashboard";
 
 // Generic transactional email via Resend.
 export const sendEmail = internalAction({
