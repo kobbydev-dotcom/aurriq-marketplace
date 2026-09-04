@@ -42,6 +42,7 @@ export default function ProfilePage() {
 
   // Convex data
   const user = useQuery(api.users.current);
+  const hasPasswordAccount = useQuery((api as any).users.hasPasswordAccount) as boolean | undefined;
   const storeUser = useMutation(api.users.storeUser);
   const updateProfile = useMutation(api.users.updateProfile);
   const scheduleDeletion = useMutation((api as any).accountDeletion.scheduleDeletion);
@@ -76,6 +77,7 @@ export default function ProfilePage() {
   const [resetCode, setResetCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [resetSent, setResetSent] = useState(false);
+  const [resetMode, setResetMode] = useState<"reset" | "setup">("reset");
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -193,7 +195,17 @@ export default function ProfilePage() {
     }
     try {
       await sendPasswordResetNotice({});
-      await signIn("password", { email: user.email, flow: "reset" });
+      if (hasPasswordAccount) {
+        await signIn("password", { email: user.email, flow: "reset" });
+        setResetMode("reset");
+      } else {
+        if (newPassword.length < 6) {
+          toast.error("Choose a password with at least 6 characters first.");
+          return;
+        }
+        await signIn("password", { email: user.email, password: newPassword, flow: "signUp" });
+        setResetMode("setup");
+      }
       setResetSent(true);
       toast.success(phone ? "Reset code sent to your email and a notice was sent by SMS." : "Reset code sent to your login email.");
     } catch (error) {
@@ -209,9 +221,9 @@ export default function ProfilePage() {
     try {
       await signIn("password", {
         email: user?.email,
-        flow: "reset-verification",
+        flow: resetMode === "reset" ? "reset-verification" : "email-verification",
         code: resetCode.trim(),
-        newPassword,
+        ...(resetMode === "reset" ? { newPassword } : {}),
       });
       setResetOpen(false);
       setResetSent(false);
@@ -550,7 +562,9 @@ export default function ProfilePage() {
               {!resetSent ? (
                 <div className="space-y-4">
                   <p className="text-sm text-muted-foreground">Your login email is <strong>{user?.email}</strong>.</p>
-                  <Button onClick={requestPasswordReset} className="w-full">Send reset code</Button>
+                  {hasPasswordAccount === false && <p className="text-sm text-muted-foreground">This Google/social account does not have an Aurriq password yet. Choose one below to link it to your existing account.</p>}
+                  {hasPasswordAccount === false && <Input type="password" placeholder="Choose a password" value={newPassword} onChange={(event) => setNewPassword(event.target.value)} />}
+                  <Button onClick={requestPasswordReset} className="w-full">{hasPasswordAccount === false ? "Set up password" : "Send reset code"}</Button>
                 </div>
               ) : (
                 <div className="space-y-3">

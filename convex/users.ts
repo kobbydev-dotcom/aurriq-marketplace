@@ -384,6 +384,21 @@ export const sendPasswordResetNotice = action({
   },
 });
 
+export const hasPasswordAccount = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return false;
+    const authSubject = stableAuthSubject(identity);
+    const user = authSubject
+      ? await ctx.db.query("users").withIndex("by_auth_subject", (q: any) => q.eq("authSubject", authSubject)).unique()
+      : await ctx.db.query("users").withIndex("by_token", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier)).unique();
+    if (!user) return false;
+    const accounts = await ctx.db.query("authAccounts").withIndex("userIdAndProvider", (q: any) => q.eq("userId", user._id).eq("provider", "password")).collect();
+    return accounts.length > 0;
+  },
+});
+
 // Resolve an avatar value (storage id or external URL) to a displayable URL.
 export const resolveAvatarUrl = query({
   args: { storageId: v.optional(v.string()) },
