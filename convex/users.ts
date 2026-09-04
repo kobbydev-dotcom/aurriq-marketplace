@@ -60,6 +60,9 @@ export const updateProfile = mutation({
     paymentMethod: v.optional(v.string()),
     paymentNetwork: v.optional(v.string()),
     paymentAccount: v.optional(v.string()),
+    businessType: v.optional(v.string()),
+    notifyEmail: v.optional(v.string()),
+    avatarStorageId: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -105,6 +108,9 @@ export const updateProfile = mutation({
     if (typeof args.paymentMethod === "string") patch.paymentMethod = args.paymentMethod;
     if (typeof args.paymentNetwork === "string") patch.paymentNetwork = args.paymentNetwork;
     if (typeof args.paymentAccount === "string") patch.paymentAccount = args.paymentAccount;
+    if (typeof args.businessType === "string") patch.businessType = args.businessType;
+    if (typeof args.notifyEmail === "string") patch.notifyEmail = args.notifyEmail.trim();
+    if (typeof args.avatarStorageId === "string") patch.avatarStorageId = args.avatarStorageId;
     if (typeof args.isSeller === "boolean") patch.isSeller = args.isSeller;
     if (args.role === "seller") patch.isSeller = true;
 
@@ -113,5 +119,29 @@ export const updateProfile = mutation({
     }
 
     return true;
+  },
+});
+
+// Resolve an avatar value (storage id or external URL) to a displayable URL.
+export const resolveAvatarUrl = query({
+  args: { storageId: v.optional(v.string()) },
+  handler: async (ctx, args) => {
+    if (!args.storageId) return null;
+    if (args.storageId.startsWith("http")) return args.storageId;
+    try {
+      return await ctx.storage.getUrl(args.storageId as any);
+    } catch {
+      return null;
+    }
+  },
+});
+
+// Generate an upload URL for avatar upload (reuses product storage upload).
+export const generateAvatarUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    return await ctx.storage.generateUploadUrl();
   },
 });

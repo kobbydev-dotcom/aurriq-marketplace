@@ -116,6 +116,11 @@ export const placeOrder = mutation({
       });
       orderIds.push(orderId);
 
+      // Notify the seller instantly (SMS + optional email + in-app) about the new order.
+      await ctx.scheduler.runAfter(0, (internal as any).receipts.notifySellerOfOrder, {
+        orderId,
+      });
+
       if (!itemOnline) {
         // Non-gateway methods settle stock immediately.
         const newStock = product.stockQuantity - item.quantity;
@@ -234,5 +239,22 @@ export const updateOrderStatus = mutation({
     if (order.sellerId !== user._id) throw new ConvexError({ code: "FORBIDDEN", message: "Not your order" });
 
     await ctx.db.patch(args.orderId, { status: args.status });
+
+    // Audit trail for the seller.
+    const product = await ctx.db.get(order.productId);
+    await ctx.runMutation(internal.notifications.logActivity, {
+      userId: user._id,
+      action: `Order ${order.paymentReference ?? args.orderId} marked ${args.status}`,
+      meta: { orderId: args.orderId, status: args.status },
+    });
+
+    // Notify the buyer of the status change.
+    await ctx.runMutation(internal.notifications.createNotification, {
+      userId: order.buyerId,
+      type: "order_status",
+      title: `Order ${args.status}`,
+      body: `${product?.name ?? "Your order"} is now ${args.status}.`,
+      link: "/orders",
+    });
   },
 });

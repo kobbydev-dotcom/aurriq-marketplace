@@ -2,6 +2,114 @@ import { internalAction, internalMutation } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { v } from "convex/values";
 
+const DASHBOARD_URL = process.env.APP_URL
+  ? `${process.env.APP_URL}/seller/dashboard`
+  : "https://aurriq-marketplace-live-a04ea8311137.herokuapp.com/seller/dashboard";
+
+// Generic transactional email via Resend.
+export const sendEmail = internalAction({
+  args: {
+    to: v.string(),
+    subject: v.string(),
+    heading: v.string(),
+    bodyLines: v.array(v.string()),
+    ctaText: v.optional(v.string()),
+    ctaUrl: v.optional(v.string()),
+  },
+  handler: async (_ctx, args) => {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
+      console.warn("RESEND_API_KEY not configured; skipping email to", args.to);
+      return;
+    }
+    const from = process.env.RESEND_FROM ?? "Aurriq <notifications@aurriq.com>";
+    const rows = args.bodyLines
+      .map((l) => `<p style="font-size:14px;color:#444;line-height:1.6;margin:4px 0;">${l}</p>`)
+      .join("");
+    const cta = args.ctaUrl
+      ? `<a href="${args.ctaUrl}" style="display:inline-block;margin-top:16px;background:#c9930a;color:#0c0904;text-decoration:none;padding:12px 22px;border-radius:999px;font-size:14px;font-weight:600;">${args.ctaText ?? "Open"}</a>`
+      : "";
+    const html = `
+      <div style="font-family:Georgia,serif;max-width:520px;margin:0 auto;border:1px solid #eee;border-radius:12px;overflow:hidden;">
+        <div style="background:#0c0904;padding:20px 24px;">
+          <span style="color:#c9930a;font-size:20px;letter-spacing:4px;">AURRIQ</span>
+        </div>
+        <div style="padding:24px;">
+          <p style="font-size:18px;color:#1a1a1a;margin:0 0 8px;">${args.heading}</p>
+          ${rows}
+          ${cta}
+        </div>
+      </div>`;
+    const res = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+      body: JSON.stringify({ from, to: args.to, subject: args.subject, html }),
+    });
+    if (!res.ok) console.error("Resend email failed:", await res.text());
+  },
+});
+
+// Notify a seller instantly when a buyer checks out their product:
+// SMS (with a direct dashboard link) + optional email + in-app notification + activity log.
+export const notifySellerOfOrder = internalMutation({
+  args: { orderId: v.id("orders") },
+  handler: async (ctx, args) => {
+    const order: any = await ctx.db.get(args.orderId);
+    if (!order) return;
+    const product: any = await ctx.db.get(order.productId);
+    const seller: any = await ctx.db.get(order.sellerId);
+    const buyer: any = await ctx.db.get(order.buyerId);
+    if (!seller) return;
+
+    const qty = order.quantity ?? 1;
+    const total = order.totalAmount ?? 0;
+    const productName = product?.name ?? "an item";
+    const buyerName = buyer?.name ?? "A buyer";
+
+    const summary = `${buyerName} ordered ${productName} x${qty} (GHS ${total.toFixed(2)}). Ref ${order.paymentReference ?? order._id}.`;
+
+    // 1. SMS with a direct link to the seller dashboard.
+    if (seller.phone) {
+      await ctx.scheduler.runAfter(0, internal.sms.sendSMS, {
+        to: seller.phone,
+        message: `AURRIQ: New order! ${summary} Arrange delivery here: ${DASHBOARD_URL}`,
+      });
+    }
+
+    // 2. Email (optional) to the seller's notification email or account email.
+    const sellerEmail = seller.notifyEmail ?? seller.email;
+    if (sellerEmail) {
+      await ctx.scheduler.runAfter(0, internal.receipts.sendEmail, {
+        to: sellerEmail,
+        subject: `New order: ${productName} x${qty}`,
+        heading: `You have a new order, ${seller.name ?? "Seller"}`,
+        bodyLines: [
+          summary,
+          `Buyer: ${buyerName}${order.buyerPhone ? ` · ${order.buyerPhone}` : ""}`,
+          order.buyerNote ? `Note: ${order.buyerNote}` : "",
+          "Open your dashboard to arrange and deliver the item.",
+        ].filter(Boolean),
+        ctaText: "Open Seller Dashboard",
+        ctaUrl: DASHBOARD_URL,
+      });
+    }
+
+    // 3. In-app notification + activity log.
+    await ctx.runMutation(internal.notifications.createNotification, {
+      userId: order.sellerId,
+      type: "order_placed",
+      title: "New order received",
+      body: summary,
+      link: "/seller/dashboard",
+    });
+    await ctx.runMutation(internal.notifications.logActivity, {
+      userId: order.sellerId,
+      action: `New order: ${productName} x${qty} — GHS ${total.toFixed(2)}`,
+      meta: { orderId: order._id, productId: order.productId, total, quantity: qty },
+    });
+  },
+});
+
 // Build the human-readable receipt lines shared by SMS + email.
 async function buildReceipt(ctx: any, orderId: string) {
   const order: any = await ctx.db.get(orderId);

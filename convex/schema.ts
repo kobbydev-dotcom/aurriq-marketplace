@@ -20,6 +20,12 @@ export default defineSchema({
     paymentMethod: v.optional(v.string()),
     paymentNetwork: v.optional(v.string()),
     paymentAccount: v.optional(v.string()),
+    // Seller business type (salon, barbershop, nail tech, etc.) — shown to buyers.
+    businessType: v.optional(v.string()),
+    // Optional email for order/notification emails (falls back to account email).
+    notifyEmail: v.optional(v.string()),
+    // Convex storage id for an uploaded avatar (resolved to a URL at query time).
+    avatarStorageId: v.optional(v.string()),
   })
   .index("by_token", ["tokenIdentifier"])
   .index("email", ["email"]),
@@ -76,6 +82,25 @@ export default defineSchema({
   })
     .index("by_user", ["userId"])
     .index("by_user_and_product", ["userId", "productId"]),
+
+  // In-app notifications for buyers & sellers (orders, messages, calls, alerts).
+  notifications: defineTable({
+    userId: v.id("users"),
+    type: v.string(), // order_placed | order_status | message | call_request | low_stock | payment
+    title: v.string(),
+    body: v.optional(v.string()),
+    link: v.optional(v.string()),
+    isRead: v.boolean(),
+  })
+    .index("by_user", ["userId"]),
+
+  // Immutable audit trail of everything that happens in an account (sales, edits, etc.)
+  activity: defineTable({
+    userId: v.id("users"),
+    action: v.string(),
+    meta: v.optional(v.any()),
+  })
+    .index("by_user", ["userId"]),
 
   reports: defineTable({
     reporterId: v.id("users"),

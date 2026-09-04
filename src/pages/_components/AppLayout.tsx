@@ -4,6 +4,7 @@ import { Authenticated, Unauthenticated } from "convex/react";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { useAuth } from "@/hooks/use-auth.ts";
 import { Button } from "@/components/ui/button";
+import { NotificationBell } from "@/components/notifications.tsx";
 import { cn } from "@/lib/utils";
 
 const navLinks = [
@@ -60,6 +61,9 @@ export default function AppLayout() {
 
           {/* Auth area */}
           <div className="flex items-center gap-2">
+            <Authenticated>
+              <NotificationBell />
+            </Authenticated>
             {isSso ? (
               <Button size="sm" variant="ghost" className="gap-1.5 text-muted-foreground" onClick={handleSignOut}>
                 <LogOut className="size-3.5" /> Sign Out

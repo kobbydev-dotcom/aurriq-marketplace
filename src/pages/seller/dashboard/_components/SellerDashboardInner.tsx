@@ -52,6 +52,98 @@ function StockBadge({ stock, threshold }: { stock: number; threshold: number }) 
   return <Badge variant="secondary" className="text-[10px]">{stock} in stock</Badge>;
 }
 
+// ── History tab: every sale + account action, for future reference ──
+function HistoryTab({ orders, activity }: { orders: any[] | undefined; activity: any[] | undefined }) {
+  const [view, setView] = useState<"sales" | "activity">("sales");
+
+  if (orders === undefined || activity === undefined) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}
+      </div>
+    );
+  }
+
+  const totalRevenue = orders
+    .filter((o) => o.status !== "cancelled")
+    .reduce((sum, o) => sum + (o.totalAmount ?? 0), 0);
+  const totalUnits = orders
+    .filter((o) => o.status !== "cancelled")
+    .reduce((sum, o) => sum + (o.quantity ?? 1), 0);
+
+  return (
+    <div className="space-y-5">
+      {/* Summary */}
+      <div className="grid grid-cols-3 gap-3">
+        <Card><CardContent className="p-4"><p className="text-[11px] text-muted-foreground uppercase tracking-wider">Total sales</p><p className="text-2xl font-light mt-1">{orders.filter((o) => o.status !== "cancelled").length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-[11px] text-muted-foreground uppercase tracking-wider">Units sold</p><p className="text-2xl font-light mt-1">{totalUnits}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-[11px] text-muted-foreground uppercase tracking-wider">Revenue</p><p className="text-2xl font-light mt-1 text-primary">{formatCurrency(totalRevenue)}</p></CardContent></Card>
+      </div>
+
+      <div className="flex gap-2">
+        <Button size="sm" variant={view === "sales" ? "default" : "outline"} onClick={() => setView("sales")} className="gap-1.5"><ShoppingBag className="size-3.5" /> Sales</Button>
+        <Button size="sm" variant={view === "activity" ? "default" : "outline"} onClick={() => setView("activity")} className="gap-1.5"><Clock className="size-3.5" /> Account activity</Button>
+      </div>
+
+      {view === "sales" ? (
+        orders.length === 0 ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon"><ShoppingBag /></EmptyMedia>
+              <EmptyTitle>No sales yet</EmptyTitle>
+              <EmptyDescription>Every completed order will be recorded here for your records.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <div className="space-y-2">
+            {orders.map((o: any) => (
+              <div key={o._id} className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
+                <div className="size-11 rounded-md overflow-hidden bg-muted shrink-0">
+                  {o.product?.images?.[0] ? <img src={o.product.images[0]} alt="" className="w-full h-full object-cover" /> : <Package className="m-2.5 size-5 text-muted-foreground/40" />}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate">{o.product?.name ?? "Deleted product"}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {o.quantity ?? 1} unit{(o.quantity ?? 1) !== 1 ? "s" : ""} · {o.buyerName} · {formatDistanceToNow(o._creationTime, { addSuffix: true })}
+                  </p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="text-sm font-semibold text-primary">{formatCurrency(o.totalAmount ?? 0)}</p>
+                  <Badge variant="secondary" className="text-[9px] capitalize">{o.status}</Badge>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : (
+        activity.length === 0 ? (
+          <Empty>
+            <EmptyHeader>
+              <EmptyMedia variant="icon"><Clock /></EmptyMedia>
+              <EmptyTitle>No activity yet</EmptyTitle>
+              <EmptyDescription>Actions in your account (new orders, status changes, edits) will appear here.</EmptyDescription>
+            </EmptyHeader>
+          </Empty>
+        ) : (
+          <div className="space-y-2">
+            {activity.map((a: any) => (
+              <div key={a._id} className="flex items-start gap-3 rounded-lg border border-border bg-card px-4 py-3">
+                <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
+                  <Clock className="size-3.5 text-primary" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm">{a.action}</p>
+                  <p className="text-xs text-muted-foreground">{formatDistanceToNow(a._creationTime, { addSuffix: true })}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
 function ProductCard({
   product,
   onEdit,
@@ -392,6 +484,8 @@ export default function SellerDashboardInner() {
   const getMyProducts = ((api.products as any).getMyProducts || (api.products as any).listAll) as any;
   const getSellerStats = ((api.products as any).getSellerStats || (api.products as any).listAll) as any;
   const getCurrentUser = api.users.current;
+  const getSellerOrdersQuery = ((api.orders as any).getSellerOrders || (api.products as any).listAll) as any;
+  const getMyActivity = ((api.notifications as any).getMyActivity || (api.products as any).listAll) as any;
   const updateProductEndpoint = ((api.products as any).updateProduct || (api.products as any).listAll) as any;
   const deleteProductEndpoint = ((api.products as any).deleteProduct || (api.products as any).listAll) as any;
   const updateProfileEndpoint = ((api.users as any).updateProfile || (api.products as any).listAll) as any;
@@ -399,6 +493,8 @@ export default function SellerDashboardInner() {
   const products = useQuery(getMyProducts, {});
   const stats = useQuery(getSellerStats, {});
   const currentUser = useQuery(getCurrentUser, {});
+  const sellerOrders = useQuery(getSellerOrdersQuery, {});
+  const activity = useQuery(getMyActivity, {});
   
   const updateProduct = useMutation(updateProductEndpoint) as any;
   const deleteProduct = useMutation(deleteProductEndpoint) as any;
@@ -552,6 +648,9 @@ export default function SellerDashboardInner() {
           <TabsTrigger value="payments" className="gap-2 cursor-pointer">
             <CreditCard className="size-3.5" /> Payments
           </TabsTrigger>
+          <TabsTrigger value="history" className="gap-2 cursor-pointer">
+            <Clock className="size-3.5" /> History
+          </TabsTrigger>
         </TabsList>
 
         {/* ── Products Tab ── */}
@@ -659,6 +758,10 @@ export default function SellerDashboardInner() {
             </div>
             <PaymentSettingsTab currentUser={currentUser} onSave={handleSavePaymentSettings} />
           </div>
+        </TabsContent>
+
+        <TabsContent value="history">
+          <HistoryTab orders={sellerOrders} activity={activity} />
         </TabsContent>
       </Tabs>
 

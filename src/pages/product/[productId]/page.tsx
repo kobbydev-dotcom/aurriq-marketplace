@@ -31,10 +31,64 @@ export default function ProductDetailPage() {
     productId ? { productId: productId as Id<"products"> } : "skip"
   );
   const addToCart = useMutation(api.cart.addToCart);
+  const sendMessage = useMutation(api.messages.sendMessage);
 
   const [selectedImage, setSelectedImage] = useState(0);
   const [qty, setQty] = useState(1);
   const [addingToCart, setAddingToCart] = useState(false);
+  const [messageOpen, setMessageOpen] = useState(false);
+  const [messageText, setMessageText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [callOpen, setCallOpen] = useState(false);
+
+  const sellerBusinessType = (product as any)?.seller?.businessType ?? (product as any)?.sellerBusinessType;
+  const sellerPhone = (product as any)?.seller?.phone ?? (product as any)?.sellerPhone;
+  const businessLabel =
+    sellerBusinessType === "salon" ? "Salon Owner"
+    : sellerBusinessType === "barbershop" ? "Barbershop Owner"
+    : sellerBusinessType === "nail_tech" ? "Nail Tech"
+    : sellerBusinessType === "lash_tech" ? "Lash Tech"
+    : sellerBusinessType === "makeup" ? "Makeup Artist"
+    : sellerBusinessType === "spa" ? "Spa / Wellness"
+    : sellerBusinessType === "other" ? "Beauty Service"
+    : null;
+
+  const handleSendMessage = async () => {
+    if (!product || !messageText.trim()) return;
+    setSending(true);
+    try {
+      await sendMessage({
+        receiverId: product.sellerId,
+        productId: product._id,
+        content: messageText.trim(),
+        type: "message",
+      });
+      toast.success("Message sent to the seller");
+      setMessageText("");
+      setMessageOpen(false);
+    } catch (e) {
+      const msg = e instanceof ConvexError ? (e.data as { message: string }).message : "Failed to send message";
+      toast.error(msg);
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleRequestCall = async () => {
+    if (!product) return;
+    try {
+      await sendMessage({
+        receiverId: product.sellerId,
+        productId: product._id,
+        content: "I'd like to talk to you about this product. Please call me.",
+        type: "call_request",
+      });
+      toast.success("Call request sent to the seller");
+    } catch (e) {
+      const msg = e instanceof ConvexError ? (e.data as { message: string }).message : "Failed to send request";
+      toast.error(msg);
+    }
+  };
 
   const handleAddToCart = async () => {
     if (!productId) return;
@@ -192,9 +246,12 @@ export default function ProductDetailPage() {
           <div className="bg-card border border-border rounded-lg px-4 py-3 flex items-center justify-between">
             <div>
               <p className="text-xs text-muted-foreground">Sold by</p>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <p className="text-sm font-medium">{(product as any).seller?.name ?? "Aurriq Seller"}</p>
                 {(product as any).seller?.isVerified && <VerifiedBadge size="sm" />}
+                {businessLabel && (
+                  <Badge className="text-[10px] bg-primary/15 text-primary border-primary/30">{businessLabel}</Badge>
+                )}
               </div>
             </div>
             <div className="flex items-center">
@@ -252,14 +309,14 @@ export default function ProductDetailPage() {
                 <Button
                   variant="secondary"
                   className="gap-2"
-                  onClick={() => toast.info("Messaging coming in a future milestone!")}
+                  onClick={() => setMessageOpen(true)}
                 >
                   <MessageCircle className="size-4" /> Message Seller
                 </Button>
                 <Button
                   variant="secondary"
                   className="gap-2"
-                  onClick={() => toast.info("Call request coming in a future milestone!")}
+                  onClick={() => setCallOpen(true)}
                 >
                   <Phone className="size-4" /> Request Call
                 </Button>
@@ -291,6 +348,58 @@ export default function ProductDetailPage() {
           </Authenticated>
         </div>
       </div>
+
+      {/* Message seller dialog */}
+      <Dialog open={messageOpen} onOpenChange={setMessageOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Message {(product as any).seller?.name ?? "Seller"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-2 mt-2">
+            <Textarea
+              placeholder="Ask about this product..."
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              rows={4}
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setMessageOpen(false)} disabled={sending}>Cancel</Button>
+            <Button onClick={handleSendMessage} disabled={sending || !messageText.trim()} className="gap-2">
+              {sending && <Loader2 className="size-4 animate-spin" />} Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Request call dialog */}
+      <Dialog open={callOpen} onOpenChange={setCallOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Request a call</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 mt-2 text-sm text-muted-foreground">
+            {sellerPhone ? (
+              <>
+                <p>You can call the seller directly:</p>
+                <a href={`tel:${sellerPhone}`} className="text-primary font-semibold text-lg">{sellerPhone}</a>
+                <p className="text-xs">Or send a call request and they'll reach out to you.</p>
+              </>
+            ) : (
+              <p>Send a call request and the seller will reach out to you about this product.</p>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setCallOpen(false)}>Close</Button>
+            <Button
+              className="gap-2"
+              onClick={async () => { await handleRequestCall(); setCallOpen(false); }}
+            >
+              <Phone className="size-4" /> Send Call Request
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

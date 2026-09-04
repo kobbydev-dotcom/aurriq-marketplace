@@ -185,9 +185,20 @@ export default function ShopPage() {
                       <span className="text-xs text-muted-foreground line-through">{formatCurrency(p.originalPrice)}</span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 mt-0.5">
+                  <div className="flex items-center gap-1 mt-0.5 flex-wrap">
                     <p className="text-[11px] text-muted-foreground">by {(p as any).sellerName}</p>
                     {(p as any).sellerIsVerified && <VerifiedBadge size="xs" />}
+                    {(p as any).sellerBusinessType && (
+                      <span className="text-[9px] font-medium px-1.5 py-0.5 rounded bg-primary/15 text-primary border border-primary/30">
+                        {(p as any).sellerBusinessType === "salon" ? "Salon"
+                          : (p as any).sellerBusinessType === "barbershop" ? "Barbershop"
+                          : (p as any).sellerBusinessType === "nail_tech" ? "Nail Tech"
+                          : (p as any).sellerBusinessType === "lash_tech" ? "Lash Tech"
+                          : (p as any).sellerBusinessType === "makeup" ? "Makeup Artist"
+                          : (p as any).sellerBusinessType === "spa" ? "Spa"
+                          : "Beauty Pro"}
+                      </span>
+                    )}
                   </div>
                 </div>
               </Link>
