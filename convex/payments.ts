@@ -450,13 +450,13 @@ export const recoverMarketplaceSubscription = action({
   args: { paymentReference: v.string() },
   handler: async (ctx, args) => {
     const user: any = await ctx.runQuery(api.users.current, {});
-    if (!user?.email) throw new Error("Please sign in before recovering payment");
+    if (!user?.email) return { recovered: false, message: "Please sign in to finish activating your vendor account." };
     if (!args.paymentReference.startsWith("AURRIQ-VENDOR-")) {
-      throw new Error("That is not an Aurriq vendor payment reference");
+      return { recovered: false, message: "This payment link is no longer valid. Please start a new subscription." };
     }
 
     const secret = process.env.PAYSTACK_SECRET_KEY;
-    if (!secret) throw new Error("Payment verification is not configured");
+    if (!secret) return { recovered: false, message: "Payment verification is temporarily unavailable. Please try again shortly." };
     const response = await fetch(
       `https://api.paystack.co/transaction/verify/${encodeURIComponent(args.paymentReference)}`,
       { headers: { Authorization: `Bearer ${secret}` } }
@@ -465,17 +465,21 @@ export const recoverMarketplaceSubscription = action({
     const customerEmail = String(payload?.data?.customer?.email ?? "").toLowerCase();
     const accountEmail = String(user.email).toLowerCase();
     if (customerEmail && customerEmail !== accountEmail) {
-      throw new Error("This payment belongs to a different email account");
+      return { recovered: false, message: "This payment belongs to a different email account." };
     }
     if (String(payload?.data?.status ?? "").toLowerCase() !== "success") {
-      throw new Error("Paystack has not marked this payment successful yet");
+      return { recovered: false, message: "Paystack has not confirmed this payment yet. No further action is needed; you can try again shortly." };
     }
 
-    await ctx.runMutation(internal.payments.applyMarketplaceSubscription, {
-      paymentReference: args.paymentReference,
-      status: "success",
-      transactionId: payload?.data?.id ? String(payload.data.id) : undefined,
-    });
+    try {
+      await ctx.runMutation(internal.payments.applyMarketplaceSubscription, {
+        paymentReference: args.paymentReference,
+        status: "success",
+        transactionId: payload?.data?.id ? String(payload.data.id) : undefined,
+      });
+    } catch {
+      return { recovered: false, message: "We could not link this payment to your account yet. Please contact support with your Paystack receipt." };
+    }
     return { recovered: true };
   },
 });

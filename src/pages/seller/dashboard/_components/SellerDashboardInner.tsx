@@ -570,23 +570,34 @@ export default function SellerDashboardInner() {
 
   useEffect(() => {
     const reference = searchParams.get("reference")
-      || localStorage.getItem("aurriq_pending_vendor_payment")
-      || (currentUser as any)?.marketplacePaymentReference;
+      || localStorage.getItem("aurriq_pending_vendor_payment");
     if (!reference || currentUser === undefined || currentUser?.role === "seller" || recoveryAttempted.current) return;
 
     recoveryAttempted.current = true;
     setRecoveringPayment(true);
     recoverMarketplaceSubscription({ paymentReference: reference })
-      .then(() => {
+      .then((result: any) => {
+        if (!result?.recovered) {
+          localStorage.removeItem("aurriq_pending_vendor_payment");
+          setRecoveringPayment(false);
+          toast.error(result?.message ?? "We could not confirm the payment yet. Please try again shortly.");
+          return;
+        }
         localStorage.removeItem("aurriq_pending_vendor_payment");
         toast.success("Payment confirmed. Your vendor dashboard is ready.");
       })
       .catch((error) => {
-        recoveryAttempted.current = false;
+        recoveryAttempted.current = true;
+        localStorage.removeItem("aurriq_pending_vendor_payment");
         setRecoveringPayment(false);
-        toast.error(error instanceof Error ? error.message : "Unable to verify payment");
+        toast.error("We could not confirm the payment yet. Please try again shortly.");
       })
-      .finally(() => undefined);
+      .finally(() => {
+        searchParams.delete("subscription");
+        searchParams.delete("reference");
+        searchParams.delete("trxref");
+        setSearchParams(searchParams, { replace: true });
+      });
   }, [currentUser, searchParams, setSearchParams, recoverMarketplaceSubscription]);
 
   const handleEdit = (p: Doc<"products">) => {
