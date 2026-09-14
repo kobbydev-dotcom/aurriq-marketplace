@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "preview:heroku": "vite preview --host 0.0.0.0 --port $PORT",
     "heroku-postbuild": "npm run build",
-    "start": "npm run preview:heroku"
+    "start": "node server.mjs"
   },
   "dependencies": {
     "@convex-dev/auth": "^0.0.94",

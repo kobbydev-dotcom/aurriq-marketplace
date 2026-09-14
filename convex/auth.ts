@@ -5,14 +5,13 @@ import { Email } from "@convex-dev/auth/providers/Email";
 import { convexAuth } from "@convex-dev/auth/server";
 
 async function sendAuthCode({ identifier, token }: { identifier: string; token: string }) {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) throw new Error("Password email delivery is not configured");
-  const from = process.env.RESEND_FROM ?? "Aurriq <notifications@aurriq.com>";
-  const response = await fetch("https://api.resend.com/emails", {
+  const serviceUrl = process.env.AURRIQ_EMAIL_SERVICE_URL;
+  const serviceSecret = process.env.AURRIQ_EMAIL_SERVICE_SECRET;
+  if (!serviceUrl || !serviceSecret) throw new Error("Password email delivery is not configured");
+  const response = await fetch(`${serviceUrl.replace(/\/$/, "")}/api/email/send`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceSecret}` },
     body: JSON.stringify({
-      from,
       to: identifier,
       subject: "Your Aurriq security code",
       html: `<p>Your Aurriq security code is:</p><p style="font-size:28px;font-weight:700;letter-spacing:6px">${token}</p><p>This code expires soon. If you did not request it, you can ignore this message.</p>`,
