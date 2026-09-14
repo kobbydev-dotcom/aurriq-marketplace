@@ -41,6 +41,15 @@ function isAnonymousPlaceholder(name: string | null | undefined) {
   return !name || /^(anonymous buyer|anonymous|new user|user)$/i.test(name.trim());
 }
 
+async function findEmailUser(ctx: any, email: string) {
+  const matches = await ctx.db.query("users").withIndex("email", (q: any) => q.eq("email", email)).collect();
+  return matches.sort((a: any, b: any) => {
+    const aScore = [a.name, a.phone, a.businessType, a.avatarStorageId, a.isSeller, a.role].filter(Boolean).length;
+    const bScore = [b.name, b.phone, b.businessType, b.avatarStorageId, b.isSeller, b.role].filter(Boolean).length;
+    return bScore - aScore || a._creationTime - b._creationTime;
+  })[0] ?? null;
+}
+
 // Public: sellers/service businesses who opted in to share their shop location,
 // sorted by distance from the given coordinates.
 // Public: a seller's storefront by Convex user id or DOABookPro slug — used by
@@ -221,10 +230,7 @@ export const storeUser = mutation({
     }
 
     if (identityEmail) {
-      user = await ctx.db
-        .query("users")
-        .withIndex("email", (q) => q.eq("email", identityEmail))
-        .unique();
+      user = await findEmailUser(ctx, identityEmail);
       if (user) {
         const patch: Record<string, unknown> = {
           tokenIdentifier: identity.tokenIdentifier,
@@ -316,10 +322,18 @@ export const updateProfile = mutation({
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier!))
       .unique();
 
+    const identityEmail = typeof (identity as any).email === "string"
+      ? String((identity as any).email).trim().toLowerCase()
+      : undefined;
+
+    if (!user && identityEmail) {
+      user = await findEmailUser(ctx, identityEmail);
+    }
+
     if (!user) {
       const userId = await ctx.db.insert("users", {
         tokenIdentifier: identity.tokenIdentifier!,
-        email: typeof (identity as any).email === "string" ? String((identity as any).email).trim().toLowerCase() : undefined,
+        email: identityEmail,
         name: (args.name?.trim() || identity.name || "New User").trim(),
         // Cast to string or undefined explicitly to satisfy TypeScript
         image: typeof identity.picture === 'string' ? identity.picture : undefined,

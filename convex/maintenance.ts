@@ -128,3 +128,49 @@ export const cleanupDummyMarketplaceUsers = mutation({
     return { deleted, skipped };
   },
 });
+
+export const mergeDuplicateUser = mutation({
+  args: {
+    duplicateUserId: v.id("users"),
+    canonicalUserId: v.id("users"),
+    confirmation: v.literal("MERGE_AURRIQ_DUPLICATE_USER"),
+  },
+  handler: async (ctx, args) => {
+    if (args.duplicateUserId === args.canonicalUserId) throw new Error("Users must be different");
+    const duplicate: any = await ctx.db.get(args.duplicateUserId);
+    const canonical: any = await ctx.db.get(args.canonicalUserId);
+    if (!duplicate || !canonical) throw new Error("Both user records must exist");
+    if (!duplicate.email || duplicate.email.trim().toLowerCase() !== canonical.email?.trim().toLowerCase()) {
+      throw new Error("Users must have the same email");
+    }
+
+    const copyFields = ["name", "image", "phone", "avatar", "paymentMethod", "paymentNetwork", "paymentAccount", "businessType", "serviceTypes", "customServiceDescription", "notifyEmail", "avatarStorageId", "locationLabel", "latitude", "longitude", "locationShared", "doabookproSlug", "marketplaceSubscriptionStatus", "marketplacePlan", "marketplaceSubscriptionSource", "marketplacePaidUntil", "marketplacePaymentReference"];
+    const patch: Record<string, unknown> = {};
+    for (const field of copyFields) {
+      if (canonical[field] === undefined && duplicate[field] !== undefined) patch[field] = duplicate[field];
+    }
+    if (Object.keys(patch).length > 0) await ctx.db.patch(canonical._id, patch);
+
+    const replace = async (table: string, predicate: (doc: any) => boolean, patchDoc: (doc: any) => Record<string, unknown>) => {
+      const docs = await (ctx.db as any).query(table).collect();
+      for (const doc of docs.filter(predicate)) await ctx.db.patch(doc._id, patchDoc(doc));
+    };
+    await replace("messages", (d) => d.senderId === duplicate._id || d.receiverId === duplicate._id, (d) => ({ senderId: d.senderId === duplicate._id ? canonical._id : d.senderId, receiverId: d.receiverId === duplicate._id ? canonical._id : d.receiverId }));
+    await replace("cartItems", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+    await replace("notifications", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+    await replace("activity", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+    await replace("follows", (d) => d.followerId === duplicate._id || d.followeeId === duplicate._id, (d) => ({ followerId: d.followerId === duplicate._id ? canonical._id : d.followerId, followeeId: d.followeeId === duplicate._id ? canonical._id : d.followeeId }));
+    await replace("analyticsEvents", (d) => d.actorId === duplicate._id || d.sellerId === duplicate._id, (d) => ({ actorId: d.actorId === duplicate._id ? canonical._id : d.actorId, sellerId: d.sellerId === duplicate._id ? canonical._id : d.sellerId }));
+    await replace("reviews", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+    await replace("wishlist", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+    await replace("rfqs", (d) => d.buyerId === duplicate._id || d.sellerId === duplicate._id, (d) => ({ buyerId: d.buyerId === duplicate._id ? canonical._id : d.buyerId, sellerId: d.sellerId === duplicate._id ? canonical._id : d.sellerId }));
+    await replace("reports", (d) => d.reporterId === duplicate._id || d.targetSellerId === duplicate._id, (d) => ({ reporterId: d.reporterId === duplicate._id ? canonical._id : d.reporterId, targetSellerId: d.targetSellerId === duplicate._id ? canonical._id : d.targetSellerId }));
+    await replace("orders", (d) => d.userId === duplicate._id || d.buyerId === duplicate._id || d.sellerId === duplicate._id, (d) => ({ userId: d.userId === duplicate._id ? canonical._id : d.userId, buyerId: d.buyerId === duplicate._id ? canonical._id : d.buyerId, sellerId: d.sellerId === duplicate._id ? canonical._id : d.sellerId }));
+    await replace("products", (d) => d.sellerId === duplicate._id, () => ({ sellerId: canonical._id }));
+    await replace("authSessions", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+    await replace("authAccounts", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+
+    await ctx.db.delete(duplicate._id);
+    return { merged: duplicate._id, kept: canonical._id };
+  },
+});
