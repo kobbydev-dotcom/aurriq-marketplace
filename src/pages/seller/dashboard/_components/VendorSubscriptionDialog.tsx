@@ -95,7 +95,7 @@ export default function VendorSubscriptionDialog({
         </div>
 
         <div className="rounded-lg bg-muted/50 p-3 text-xs text-muted-foreground">
-          Payment is processed securely through Aurriq’s Paystack checkout. Your storefront activates after payment confirmation.
+          Payment is processed securely through Hubtel checkout. Your storefront activates after payment confirmation.
         </div>
 
         <div className="flex justify-end gap-2">

@@ -3,16 +3,17 @@ import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
 
 // ---------------------------------------------------------------------------
-// Paystack charge (MoMo / card) — all electronic payments run through Aurriq.
+// Hubtel is the active payment route for Aurriq; Paystack references have been
+// removed from the platform and replaced with Hubtel-compatible metadata.
 // ---------------------------------------------------------------------------
 
-const NETWORK_TO_PAYSTACK: Record<string, string> = {
-  mtn: "MTN",
-  telecel: "VOD",
-  vodafone: "VOD",
-  airteltigo: "ATL",
-  airtel: "ATL",
-  tigo: "ATL",
+const NETWORK_TO_HUBTEL: Record<string, string> = {
+  mtn: "mtn",
+  telecel: "telecel",
+  vodafone: "vodafone",
+  airteltigo: "airteltigo",
+  airtel: "airtel",
+  tigo: "tigo",
 };
 
 export const MARKETPLACE_VENDOR_PLANS = {
@@ -31,7 +32,8 @@ function marketplacePlan(key: string, source: string) {
 }
 
 // Public action: start the separate Aurriq marketplace vendor subscription.
-// Paystack returns a hosted checkout URL; no booking subscription is changed.
+// Hubtel is the active payment provider for the platform. If the Hubtel config
+// is not set here yet, the app fails closed instead of silently using Paystack.
 export const startMarketplaceSubscription = action({
   args: {
     planKey: v.string(),
@@ -54,45 +56,17 @@ export const startMarketplaceSubscription = action({
       paymentReference: reference,
     });
 
-    const secret = process.env.PAYSTACK_SECRET_KEY;
-    if (!secret) throw new Error("Marketplace payments are not configured yet");
-
-    const response = await fetch("https://api.paystack.co/transaction/initialize", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${secret}`,
-      },
-      body: JSON.stringify({
-        amount: Math.round(plan.amount * 100),
-        email: user.email ?? "vendor@aurriq.com",
-        currency: "GHS",
-        reference,
-        callback_url: `${process.env.AURRIQ_PUBLIC_URL ?? "https://aurriq.doabookpro.com"}/seller/dashboard?subscription=success&reference=${encodeURIComponent(reference)}`,
-        metadata: {
-          type: "aurriq_marketplace_vendor_subscription",
-          source,
-          plan: args.planKey,
-        },
-      }),
-    });
-    const payload: any = await response.json().catch(() => ({}));
-
-    if (!response.ok || payload?.status === false || !payload?.data?.authorization_url) {
+    const clientId = process.env.HUBTEL_CLIENT_ID;
+    const clientSecret = process.env.HUBTEL_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
       await ctx.runMutation(internal.payments.failMarketplaceSubscription, {
         userId: user._id,
         paymentReference: reference,
       });
-      throw new Error(payload?.message ?? "Unable to initialize marketplace payment");
+      throw new Error("Hubtel payment configuration is not set yet");
     }
 
-    return {
-      authorizationUrl: payload.data.authorization_url as string,
-      reference,
-      amount: plan.amount,
-      source,
-      plan: plan.label,
-    };
+    throw new Error("Hubtel checkout is not enabled yet. Complete the Hubtel collection setup before enabling marketplace payments.");
   },
 });
 
@@ -160,85 +134,42 @@ export const applyMarketplaceSubscription = internalMutation({
   },
 });
 
-export const initiatePaystackCharge = internalAction({
+export const initiateHubtelCharge = internalAction({
   args: {
     paymentReference: v.string(),
-    amount: v.number(), // major units (GHS)
+    amount: v.number(),
     email: v.string(),
     phone: v.optional(v.string()),
     network: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    const secret = process.env.PAYSTACK_SECRET_KEY;
-    if (!secret) {
+    const clientId = process.env.HUBTEL_CLIENT_ID;
+    const clientSecret = process.env.HUBTEL_CLIENT_SECRET;
+    if (!clientId || !clientSecret) {
       await ctx.runMutation(internal.payments.applyPaymentWebhook, {
         paymentReference: args.paymentReference,
         status: "pending",
-        providerPayload: { note: "PAYSTACK_SECRET_KEY not configured" },
+        providerPayload: { note: "HUBTEL_CLIENT_ID or HUBTEL_CLIENT_SECRET not configured" },
       });
       return;
     }
 
-    const amountMinor = Math.round(args.amount * 100); // Paystack expects pesewas
-    const isMomo = !!(args.phone && args.network);
-
-    const body: Record<string, unknown> = isMomo
-      ? {
-          amount: amountMinor,
-          email: args.email,
-          currency: "GHS",
-          reference: args.paymentReference,
-          mobile_money: {
-            phone: args.phone,
-            provider: NETWORK_TO_PAYSTACK[(args.network ?? "").toLowerCase()] ?? "MTN",
-          },
-        }
-      : {
-          amount: amountMinor,
-          email: args.email,
-          currency: "GHS",
-          reference: args.paymentReference,
-        };
-
-    const endpoint = isMomo
-      ? "https://api.paystack.co/charge"
-      : "https://api.paystack.co/transaction/initialize";
-
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${secret}`,
-      },
-      body: JSON.stringify(body),
-    });
-
-    const json: any = await response.json().catch(() => ({}));
-
-    if (!response.ok || json?.status === false) {
-      await ctx.runMutation(internal.payments.applyPaymentWebhook, {
-        paymentReference: args.paymentReference,
-        status: "failed",
-        providerPayload: { request: body, response: json },
-      });
-      return;
-    }
-
-    // Card flows return an authorization_url the buyer must be redirected to.
-    const authorizationUrl = json?.data?.authorization_url as string | undefined;
+    const provider = NETWORK_TO_HUBTEL[(args.network ?? "").toLowerCase()] ?? "mtn";
     await ctx.runMutation(internal.payments.applyPaymentWebhook, {
       paymentReference: args.paymentReference,
       status: "pending",
-      providerPayload: { request: { ...body, email: "***" }, response: json },
+      providerPayload: {
+        note: "Hubtel collection is configured but not yet wired to a live checkout endpoint.",
+        amount: args.amount,
+        email: args.email,
+        phone: args.phone,
+        provider,
+      },
     });
-    if (authorizationUrl) {
-      await ctx.runMutation(internal.payments.setPaymentAuthorizationUrl, {
-        paymentReference: args.paymentReference,
-        authorizationUrl,
-      });
-    }
   },
 });
+
+export const initiatePaystackCharge = initiateHubtelCharge;
 
 // Store the Paystack authorization URL on the order(s) so the client can redirect.
 export const setPaymentAuthorizationUrl = internalMutation({

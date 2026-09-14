@@ -153,7 +153,7 @@ export const placeOrder = mutation({
     await Promise.all(cartItems.map((item) => ctx.db.delete(item._id)));
 
     if (isOnlineCheckout && paymentReference) {
-      await ctx.scheduler.runAfter(0, (internal as any).payments.initiatePaystackCharge, {
+      await ctx.scheduler.runAfter(0, (internal as any).payments.initiateHubtelCharge, {
         paymentReference,
         amount: amountDueNow > 0 ? amountDueNow : total,
         email: args.receiptEmail ?? (user as any).email ?? "customer@aurriq.com",

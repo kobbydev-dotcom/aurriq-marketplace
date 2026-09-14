@@ -42,61 +42,45 @@ http.route({
 	}),
 });
 
-// Paystack webhook: verify the x-paystack-signature (HMAC SHA512 of the raw body)
-// and settle the order via the shared payment logic.
+// Hubtel webhook endpoint: keep the checkout settlement path but remove the
+// legacy Paystack connection from the platform entirely.
 http.route({
-	path: "/webhooks/paystack",
+	path: "/webhooks/hubtel",
 	method: "POST",
 	handler: httpAction(async (ctx, request) => {
-		const secret = process.env.PAYSTACK_SECRET_KEY;
+		const secret = process.env.HUBTEL_WEBHOOK_SECRET ?? process.env.HUBTEL_CLIENT_SECRET;
 		if (!secret) return new Response("not configured", { status: 500 });
 
-		const raw = await request.text();
-		const signature = request.headers.get("x-paystack-signature") ?? "";
+		const signature = request.headers.get("x-hubtel-signature") ?? request.headers.get("authorization")?.replace("Bearer ", "") ?? "";
+		if (!signature || signature !== secret) {
+			return new Response("unauthorized", { status: 401 });
+		}
 
-		const key = await crypto.subtle.importKey(
-			"raw",
-			new TextEncoder().encode(secret),
-			{ name: "HMAC", hash: "SHA-512" },
-			false,
-			["sign"]
-		);
-		const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(raw));
-		const computed = Array.from(new Uint8Array(mac)).map((b) => b.toString(16).padStart(2, "0")).join("");
-		if (computed !== signature) return new Response("invalid signature", { status: 401 });
+		const body = await request.json().catch(() => ({}));
+		const reference = body?.reference ?? body?.clientReference ?? body?.data?.reference;
+		const status = String(body?.status ?? body?.data?.status ?? "").toLowerCase();
+		const transactionId = body?.transactionId ?? body?.data?.transactionId ?? body?.id;
 
-		const body = JSON.parse(raw);
-		if (body?.event === "charge.success") {
-			const data = body.data ?? {};
-			const paymentReference = String(data.reference ?? "");
-			if (paymentReference.startsWith("AURRIQ-VENDOR-")) {
+		if (!reference) return new Response("missing reference", { status: 400 });
+
+		const normalizedStatus = status === "success" || status === "paid" || status === "completed"
+			? "success"
+			: status === "failed" || status === "cancelled" || status === "declined"
+				? "failed"
+				: "pending";
+
+		if (normalizedStatus === "success" || normalizedStatus === "failed") {
+			if (String(reference).startsWith("AURRIQ-VENDOR-")) {
 				await ctx.runMutation(internal.payments.applyMarketplaceSubscription, {
-					paymentReference,
-					status: "success",
-					transactionId: data.id ? String(data.id) : undefined,
+					paymentReference: String(reference),
+					status: normalizedStatus,
+					transactionId: transactionId ? String(transactionId) : undefined,
 				});
 			} else {
 				await ctx.runMutation(internal.payments.applyPaymentWebhook, {
-					paymentReference,
-					status: "success",
-					transactionId: data.id ? String(data.id) : undefined,
-					providerPayload: body,
-				});
-			}
-		} else if (body?.event === "charge.failed") {
-			const data = body.data ?? {};
-			const paymentReference = String(data.reference ?? "");
-			if (paymentReference.startsWith("AURRIQ-VENDOR-")) {
-				await ctx.runMutation(internal.payments.applyMarketplaceSubscription, {
-					paymentReference,
-					status: "failed",
-					transactionId: data.id ? String(data.id) : undefined,
-				});
-			} else {
-				await ctx.runMutation(internal.payments.applyPaymentWebhook, {
-					paymentReference,
-					status: "failed",
-					transactionId: data.id ? String(data.id) : undefined,
+					paymentReference: String(reference),
+					status: normalizedStatus,
+					transactionId: transactionId ? String(transactionId) : undefined,
 					providerPayload: body,
 				});
 			}
