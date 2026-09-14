@@ -102,8 +102,7 @@ export default function Index() {
 
       {/* Hero */}
       <section
-        className="relative min-h-screen flex flex-col justify-center overflow-hidden"
-        style={{ paddingTop: "90px" }}
+        className="relative min-h-screen flex flex-col justify-center overflow-hidden pt-[90px] lg:pt-[160px]"
       >
         <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
           <div style={{
