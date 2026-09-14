@@ -60,6 +60,42 @@ async function findNameUser(ctx: any, name: string, excludeUserId?: any) {
   return users.find((user: any) => user._id !== excludeUserId && normalizeName(String(user.name ?? "")) === normalized) ?? null;
 }
 
+async function scheduleAccountAccessAlerts(ctx: any, user: any, accessNow: number) {
+  const when = new Date(accessNow).toISOString();
+  const bodyLines = [
+    `A sign-in to your Aurriq account was detected at ${when}.`,
+    "If this was not you, reset your password and contact Aurriq support immediately.",
+  ];
+
+  await ctx.db.insert("notifications", {
+    userId: user._id,
+    type: "account_access",
+    title: "Your Aurriq account was accessed",
+    body: bodyLines.join(" "),
+    link: "/profile",
+    isRead: false,
+  });
+
+  const email = user.notifyEmail ?? user.email;
+  if (email) {
+    await ctx.scheduler.runAfter(0, internal.receipts.sendEmail, {
+      to: email,
+      subject: "New sign-in to your Aurriq account",
+      heading: `Account access detected${user.name ? `, ${user.name}` : ""}`,
+      bodyLines,
+      ctaText: "Review my profile",
+      ctaUrl: `${process.env.AURRIQ_PUBLIC_URL ?? "https://aurriq-marketplace-live-a04ea8311137.herokuapp.com"}/profile`,
+    });
+  }
+
+  if (user.phone) {
+    await ctx.scheduler.runAfter(0, internal.sms.sendSMS, {
+      to: user.phone,
+      message: `AURRIQ: New sign-in detected at ${when}. If this was not you, reset your password and contact support immediately.`,
+    });
+  }
+}
+
 export const emailAvailability = query({
   args: { email: v.string() },
   handler: async (ctx, args) => {
@@ -257,14 +293,7 @@ export const storeUser = mutation({
       }
       if (!user.lastAccessNotifiedAt || accessNow - user.lastAccessNotifiedAt > 15 * 60 * 1000) {
         patch.lastAccessNotifiedAt = accessNow;
-        await ctx.db.insert("notifications", {
-          userId: user._id,
-          type: "account_access",
-          title: "Your Aurriq account was accessed",
-          body: "A new sign-in to your account was detected.",
-          link: "/profile",
-          isRead: false,
-        });
+        await scheduleAccountAccessAlerts(ctx, user, accessNow);
       }
       if (Object.keys(patch).length > 0) await ctx.db.patch(user._id, patch as any);
       return user._id;
@@ -282,6 +311,10 @@ export const storeUser = mutation({
         if (authSubject) patch.authSubject = authSubject;
         if (isAnonymousPlaceholder(user.name) && providerName) patch.name = providerName;
         if (!user.image && providerImage) patch.image = providerImage;
+        if (!user.lastAccessNotifiedAt || accessNow - user.lastAccessNotifiedAt > 15 * 60 * 1000) {
+          patch.lastAccessNotifiedAt = accessNow;
+          await scheduleAccountAccessAlerts(ctx, user, accessNow);
+        }
         await ctx.db.patch(user._id, patch as any);
         return user._id;
       }
