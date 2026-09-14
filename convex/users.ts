@@ -78,7 +78,7 @@ async function scheduleAccountAccessAlerts(ctx: any, user: any, accessNow: numbe
 
   const email = user.notifyEmail ?? user.email;
   if (email) {
-    await ctx.scheduler.runAfter(0, internal.receipts.sendEmail, {
+    await ctx.scheduler.runAfter(0, internal.mail.sendEmail, {
       to: email,
       subject: "New sign-in to your Aurriq account",
       heading: `Account access detected${user.name ? `, ${user.name}` : ""}`,
