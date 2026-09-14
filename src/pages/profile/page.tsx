@@ -73,6 +73,7 @@ export default function ProfilePage() {
   const [deletionMode, setDeletionMode] = useState<"scheduled" | "immediate">("scheduled");
   const [deletionPasswords, setDeletionPasswords] = useState(["", "", ""]);
   const [deleting, setDeleting] = useState(false);
+  const nameAvailability = useQuery((api as any).users.nameAvailability, fullName.trim() ? { name: fullName.trim() } : "skip") as { available: boolean; message: string } | undefined;
   const [resetOpen, setResetOpen] = useState(false);
   const [resetCode, setResetCode] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -141,6 +142,10 @@ export default function ProfilePage() {
       toast.error("Please enter a full name");
       return;
     }
+    if (nameAvailability && !nameAvailability.available) {
+      toast.error(nameAvailability.message);
+      return;
+    }
     setIsLoading(true);
     try {
       await updateProfile({
@@ -159,7 +164,7 @@ export default function ProfilePage() {
       sessionStorage.setItem("aurriq_profile_saved", "true");
       window.location.replace(window.location.href);
     } catch (error) {
-      toast.error("Failed to update profile");
+      toast.error(error instanceof Error ? error.message : "Failed to update profile");
       console.error(error);
     } finally {
       setIsLoading(false);

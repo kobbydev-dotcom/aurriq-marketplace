@@ -4,7 +4,9 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
-import { useAuthActions } from "@convex-dev/auth/react"; // 1. Added live auth actions hook
+import { useAuthActions } from "@convex-dev/auth/react";
+import { useConvex } from "convex/react";
+import { api } from "../../../convex/_generated/api.js";
 import { Button } from "@/components/ui/button.tsx";
 import { Input } from "@/components/ui/input.tsx";
 import { Label } from "@/components/ui/label.tsx";
@@ -21,7 +23,8 @@ type AuthFormValues = z.infer<typeof authSchema>;
 
 export default function AuthPage() {
   const navigate = useNavigate();
-  const { signIn } = useAuthActions(); // 2. Destructured live backend signIn executor
+  const { signIn } = useAuthActions();
+  const convex = useConvex();
   const [isSignUp, setIsSignUp] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
@@ -46,7 +49,8 @@ export default function AuthPage() {
           return;
         }
         
-        // 3. Official Convex Auth Sign Up Pipeline Flow
+        const availability = await convex.query((api as any).users.emailAvailability, { email: data.email.trim().toLowerCase() });
+        if (!availability.available) throw new Error(availability.message);
         await signIn("password", { 
           email: data.email, 
           password: data.password, 
@@ -55,7 +59,6 @@ export default function AuthPage() {
         });
         toast.success("Account created successfully!", { id: toastId });
       } else {
-        // 4. Official Convex Auth Log In Pipeline Flow
         await signIn("password", { 
           email: data.email, 
           password: data.password, 
@@ -64,15 +67,13 @@ export default function AuthPage() {
         toast.success("Welcome back!", { id: toastId });
       }
       
-      // Send them straight into the operational seller panel view grid
       navigate("/seller/dashboard");
     } catch (err: any) {
       console.error("Auth Error Details:", err);
-      // Handles smart account dynamic routing feedback check instructions
       if (err.message?.includes("InvalidPassword") || err.message?.includes("could not find account")) {
         toast.error("Invalid email or password combination.", { id: toastId });
       } else {
-        toast.error("Authentication failed. Please verify your inputs.", { id: toastId });
+        toast.error(err.message || "Authentication failed. Please verify your inputs.", { id: toastId });
       }
     } finally {
       setSubmitting(false);

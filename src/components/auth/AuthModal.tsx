@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useAction } from "convex/react";
+import { useAction, useConvex } from "convex/react";
 import { api } from "../../../convex/_generated/api.js";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X, Sparkles, Mail, Chrome, Laptop, Apple, Facebook } from "lucide-react";
@@ -26,6 +26,7 @@ type SignUpFormValues = z.infer<typeof signUpSchema>;
 
 export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
   const { signIn } = useAuthActions();
+  const convex = useConvex();
   const sendPasswordResetNotice = useAction((api as any).users.sendPasswordResetNotice);
   const [activeAccordion, setActiveAccordion] = useState<string | null>("email");
   const [isFullSignUpFlow, setIsFullSignUpFlow] = useState(false);
@@ -104,11 +105,13 @@ export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange:
     setSubmitting(true);
     const toastId = toast.loading("Creating your luxury profile...");
     try {
+      const availability = await convex.query((api as any).users.emailAvailability, { email: data.email.trim().toLowerCase() });
+      if (!availability.available) throw new Error(availability.message);
       await signIn("password", { email: data.email, password: data.password, name: data.fullName, flow: "signUp" });
       toast.success("Account created successfully!", { id: toastId });
       onOpenChange(false);
     } catch (err) {
-      toast.error("Registration failed. Email might already be taken.", { id: toastId });
+      toast.error(err instanceof Error ? err.message : "Registration failed.", { id: toastId });
     } finally {
       setSubmitting(false);
     }

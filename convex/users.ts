@@ -41,6 +41,10 @@ function isAnonymousPlaceholder(name: string | null | undefined) {
   return !name || /^(anonymous buyer|anonymous|new user|user)$/i.test(name.trim());
 }
 
+function normalizeName(name: string) {
+  return name.trim().replace(/\s+/g, " ").toLowerCase();
+}
+
 async function findEmailUser(ctx: any, email: string) {
   const matches = await ctx.db.query("users").withIndex("email", (q: any) => q.eq("email", email)).collect();
   return matches.sort((a: any, b: any) => {
@@ -49,6 +53,43 @@ async function findEmailUser(ctx: any, email: string) {
     return bScore - aScore || a._creationTime - b._creationTime;
   })[0] ?? null;
 }
+
+async function findNameUser(ctx: any, name: string, excludeUserId?: any) {
+  const normalized = normalizeName(name);
+  const users = await ctx.db.query("users").collect();
+  return users.find((user: any) => user._id !== excludeUserId && normalizeName(String(user.name ?? "")) === normalized) ?? null;
+}
+
+export const emailAvailability = query({
+  args: { email: v.string() },
+  handler: async (ctx, args) => {
+    const email = args.email.trim().toLowerCase();
+    if (!email) return { available: false, message: "Enter an email address." };
+    const user = await findEmailUser(ctx, email);
+    return user
+      ? { available: false, message: "This email is already in use. Sign in instead." }
+      : { available: true, message: "" };
+  },
+});
+
+export const nameAvailability = query({
+  args: { name: v.string() },
+  handler: async (ctx, args) => {
+    const name = args.name.trim();
+    if (!name) return { available: false, message: "Enter a display name." };
+    const identity = await ctx.auth.getUserIdentity();
+    const authSubject = identity ? stableAuthSubject(identity) : undefined;
+    const current = authSubject
+      ? await ctx.db.query("users").withIndex("by_auth_subject", (q: any) => q.eq("authSubject", authSubject)).unique()
+      : identity
+        ? await ctx.db.query("users").withIndex("by_token", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier)).unique()
+        : null;
+    const user = await findNameUser(ctx, name, current?._id);
+    return user
+      ? { available: false, message: "That display name is already in use. Choose another one." }
+      : { available: true, message: "" };
+  },
+});
 
 // Public: sellers/service businesses who opted in to share their shop location,
 // sorted by distance from the given coordinates.
@@ -232,6 +273,9 @@ export const storeUser = mutation({
     if (identityEmail) {
       user = await findEmailUser(ctx, identityEmail);
       if (user) {
+        if (user.authSubject && authSubject && user.authSubject !== authSubject) {
+          throw new Error("This email is already in use. Sign in with the account's original login method.");
+        }
         const patch: Record<string, unknown> = {
           tokenIdentifier: identity.tokenIdentifier,
         };
@@ -330,6 +374,13 @@ export const updateProfile = mutation({
       user = await findEmailUser(ctx, identityEmail);
     }
 
+    if (typeof args.name === "string") {
+      const requestedName = args.name.trim();
+      if (!requestedName) throw new Error("Name cannot be empty");
+      const nameOwner = await findNameUser(ctx, requestedName, user?._id);
+      if (nameOwner) throw new Error("That display name is already in use. Choose another one.");
+    }
+
     if (!user) {
       const userId = await ctx.db.insert("users", {
         tokenIdentifier: identity.tokenIdentifier!,
@@ -350,13 +401,7 @@ export const updateProfile = mutation({
 
     const patch: Record<string, unknown> = {};
 
-    if (typeof args.name === "string") {
-      const trimmedName = args.name.trim();
-      if (trimmedName.length === 0) {
-        throw new Error("Name cannot be empty");
-      }
-      patch.name = trimmedName;
-    }
+    if (typeof args.name === "string") patch.name = args.name.trim();
 
     if (typeof args.phone === "string") patch.phone = args.phone.trim();
     if (typeof args.role === "string") patch.role = args.role;
