@@ -259,6 +259,8 @@ export default function ProfilePage() {
     try {
       await signIn("password", { email: user.email, password, flow: "signIn" });
       if (deletionMode === "immediate") {
+        // Allow the refreshed Convex identity from password verification to settle before deleting.
+        await new Promise((resolve) => setTimeout(resolve, 500));
         await purgeImmediately();
         await signOut();
         window.location.assign("/");
