@@ -14,7 +14,7 @@ async function getCanonicalActiveUsers(ctx: any) {
   const users = await ctx.db.query("users").collect();
   const activeUsers = users.filter((user: any) => !user.isPendingDeletion);
   const shadowFlags = await Promise.all(activeUsers.map((user: any) => isShadowUser(ctx, user)));
-  return activeUsers.filter((_, index) => !shadowFlags[index]);
+  return activeUsers.filter((_user: any, index: number) => !shadowFlags[index]);
 }
 
 export const getLiveStats = query({
