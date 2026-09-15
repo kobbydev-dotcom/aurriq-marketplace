@@ -2,6 +2,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useNavigate } from "react-router-dom";
 import { Bell, Check, Package, MessageSquare, Phone, AlertTriangle, CreditCard, Eye, UserMinus, UserPlus, Store } from "lucide-react";
+import { useRef } from "react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -29,8 +30,26 @@ export function NotificationBell() {
   const markRead = useMutation((api.notifications as any).markNotificationRead);
   const markAllRead = useMutation((api.notifications as any).markAllRead);
   const navigate = useNavigate();
+  const lastTap = useRef<{ id: string; at: number } | null>(null);
 
   const count = unread ?? 0;
+
+  const handleNotificationTap = async (notification: any) => {
+    const now = Date.now();
+    const isSecondTap =
+      lastTap.current?.id === notification._id &&
+      now - lastTap.current.at < 450;
+
+    await markRead({ notificationId: notification._id });
+
+    if (isSecondTap && notification.link) {
+      lastTap.current = null;
+      navigate(notification.link);
+      return;
+    }
+
+    lastTap.current = { id: notification._id, at: now };
+  };
 
   return (
     <DropdownMenu>
@@ -47,7 +66,7 @@ export function NotificationBell() {
           )}
         </button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="w-80 p-0 overflow-hidden">
+      <DropdownMenuContent align="end" className="w-96 max-w-[calc(100vw-2rem)] p-0 overflow-hidden">
         <div className="flex items-center justify-between px-4 py-2.5 border-b border-border">
           <p className="text-sm font-semibold">Notifications</p>
           {count > 0 && (
@@ -67,19 +86,17 @@ export function NotificationBell() {
               const Icon = ICONS[n.type] ?? Bell;
               return (
                 <button
+                  type="button"
                   key={n._id}
-                  onClick={async () => {
-                    await markRead({ notificationId: n._id });
-                    if (n.link) navigate(n.link);
-                  }}
-                  className={`w-full text-left px-4 py-3 flex gap-3 border-b border-border/40 hover:bg-muted/50 transition-colors ${!n.isRead ? "bg-primary/5" : ""}`}
+                  onClick={() => void handleNotificationTap(n)}
+                  className={`w-full text-left px-4 py-3 flex items-start gap-3 border-b border-border/40 hover:bg-muted/50 transition-colors ${!n.isRead ? "bg-primary/5" : ""}`}
                 >
                   <div className="size-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
                     <Icon className="size-4 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className={`text-sm ${!n.isRead ? "font-semibold" : ""}`}>{n.title}</p>
-                    {n.body && <p className="text-xs text-muted-foreground truncate">{n.body}</p>}
+                    <p className={`text-sm break-words ${!n.isRead ? "font-semibold" : ""}`}>{n.title}</p>
+                    {n.body && <p className="text-xs text-muted-foreground whitespace-normal break-words leading-relaxed">{n.body}</p>}
                     <p className="text-[10px] text-muted-foreground mt-0.5">
                       {formatDistanceToNow(n._creationTime, { addSuffix: true })}
                     </p>
