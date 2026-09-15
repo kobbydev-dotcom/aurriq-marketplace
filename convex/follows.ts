@@ -11,6 +11,29 @@ async function getCurrentUser(ctx: any) {
     .unique();
 }
 
+async function resolveUserImage(ctx: any, user: any) {
+  const value = user?.avatarStorageId ?? user?.image ?? user?.avatar;
+  if (!value) return undefined;
+  if (String(value).startsWith("http://") || String(value).startsWith("https://")) return value;
+  try {
+    return (await ctx.storage.getUrl(value as any)) ?? value;
+  } catch {
+    return value;
+  }
+}
+
+function publicUser(user: any, image: string | undefined) {
+  return {
+    _id: user._id,
+    name: user.name ?? "Aurriq Member",
+    image,
+    businessType: user.businessType,
+    isVerified: user.isVerified,
+    locationLabel: user.locationShared ? user.locationLabel : undefined,
+    lastSeenAt: user.lastSeenAt,
+  };
+}
+
 // Follow a user. Idempotent.
 export const follow = mutation({
   args: { userId: v.id("users") },
@@ -54,7 +77,16 @@ export const unfollow = mutation({
       .query("follows")
       .withIndex("by_pair", (q) => q.eq("followerId", me._id).eq("followeeId", args.userId))
       .unique();
-    if (existing) await ctx.db.delete(existing._id);
+    if (existing) {
+      await ctx.db.delete(existing._id);
+      await ctx.runMutation(internal.notifications.createNotification, {
+        userId: args.userId,
+        type: "unfollow",
+        title: "Follower update",
+        body: `${me.name ?? "Someone"} unfollowed you.`,
+        link: `/storefront/${me._id}`,
+      });
+    }
     return true;
   },
 });
@@ -89,6 +121,40 @@ export const getFollowCounts = query({
   },
 });
 
+export const getFollowers = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const follows = await ctx.db
+      .query("follows")
+      .withIndex("by_followee", (q) => q.eq("followeeId", args.userId))
+      .order("desc")
+      .collect();
+    const users: any[] = [];
+    for (const follow of follows) {
+      const user: any = await ctx.db.get(follow.followerId);
+      if (user) users.push(publicUser(user, await resolveUserImage(ctx, user)));
+    }
+    return users;
+  },
+});
+
+export const getFollowing = query({
+  args: { userId: v.id("users") },
+  handler: async (ctx, args) => {
+    const follows = await ctx.db
+      .query("follows")
+      .withIndex("by_follower", (q) => q.eq("followerId", args.userId))
+      .order("desc")
+      .collect();
+    const users: any[] = [];
+    for (const follow of follows) {
+      const user: any = await ctx.db.get(follow.followeeId);
+      if (user) users.push(publicUser(user, await resolveUserImage(ctx, user)));
+    }
+    return users;
+  },
+});
+
 // Sellers the current user follows ("Saved suppliers"), with details.
 export const getSavedSuppliers = query({
   args: {},
@@ -107,7 +173,7 @@ export const getSavedSuppliers = query({
       result.push({
         _id: seller._id,
         name: seller.name,
-        image: seller.image ?? seller.avatar,
+        image: await resolveUserImage(ctx, seller),
         businessType: seller.businessType,
         isVerified: seller.isVerified,
         locationLabel: seller.locationShared ? seller.locationLabel : undefined,

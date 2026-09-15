@@ -1,7 +1,7 @@
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { useNavigate } from "react-router-dom";
-import { Bell, Check, Package, MessageSquare, Phone, AlertTriangle, CreditCard } from "lucide-react";
+import { Bell, Check, Package, MessageSquare, Phone, AlertTriangle, CreditCard, Eye, UserMinus, UserPlus, Store } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -17,6 +17,10 @@ const ICONS: Record<string, any> = {
   call_request: Phone,
   low_stock: AlertTriangle,
   payment: CreditCard,
+  follow: UserPlus,
+  unfollow: UserMinus,
+  profile_visit: Eye,
+  store_visit: Store,
 };
 
 export function NotificationBell() {

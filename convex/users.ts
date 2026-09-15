@@ -52,6 +52,17 @@ function normalizeName(name: string) {
   return name.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+async function resolveUserImage(ctx: any, user: any) {
+  const value = user?.avatarStorageId ?? user?.image ?? user?.avatar;
+  if (!value) return undefined;
+  if (String(value).startsWith("http://") || String(value).startsWith("https://")) return value;
+  try {
+    return (await ctx.storage.getUrl(value as any)) ?? value;
+  } catch {
+    return value;
+  }
+}
+
 async function findEmailUser(ctx: any, email: string) {
   const matches = await ctx.db.query("users").withIndex("email", (q: any) => q.eq("email", email)).collect();
   return matches.sort((a: any, b: any) => {
@@ -314,7 +325,7 @@ export const getStorefront = query({
       seller: {
         _id: seller._id,
         name: seller.name,
-        image: seller.image ?? seller.avatar,
+        image: await resolveUserImage(ctx, seller),
         businessType: seller.businessType,
         isVerified: seller.isVerified,
         locationLabel: seller.locationShared ? seller.locationLabel : undefined,
@@ -347,7 +358,9 @@ export const getNearbyShops = query({
       .map((s: any) => ({
         _id: s._id,
         name: s.name,
-        image: s.image ?? s.avatar,
+        image: undefined,
+        avatar: s.avatar,
+        avatarStorageId: s.avatarStorageId,
         businessType: s.businessType,
         isVerified: s.isVerified,
         locationLabel: s.locationLabel,
@@ -358,7 +371,10 @@ export const getNearbyShops = query({
       .filter((s: any) => s.distanceKm <= radius)
       .sort((a: any, b: any) => a.distanceKm - b.distanceKm);
 
-    return withDistance;
+    return await Promise.all(withDistance.map(async (s: any) => ({
+      ...s,
+      image: await resolveUserImage(ctx, s),
+    })));
   },
 });
 
@@ -563,7 +579,14 @@ export const updateProfile = mutation({
     if (Array.isArray(args.serviceTypes)) patch.serviceTypes = args.serviceTypes.map((service) => service.trim()).filter(Boolean);
     if (typeof args.customServiceDescription === "string") patch.customServiceDescription = args.customServiceDescription.trim();
     if (typeof args.notifyEmail === "string") patch.notifyEmail = args.notifyEmail.trim();
-    if (typeof args.avatarStorageId === "string") patch.avatarStorageId = args.avatarStorageId;
+    if (typeof args.avatarStorageId === "string") {
+      patch.avatarStorageId = args.avatarStorageId;
+      const avatarUrl = await resolveUserImage(ctx, { avatarStorageId: args.avatarStorageId });
+      if (avatarUrl) {
+        patch.image = avatarUrl;
+        patch.avatar = avatarUrl;
+      }
+    }
     if (typeof args.locationLabel === "string") patch.locationLabel = args.locationLabel.trim();
     if (typeof args.latitude === "number") patch.latitude = args.latitude;
     if (typeof args.longitude === "number") patch.longitude = args.longitude;

@@ -1,4 +1,5 @@
-import { useQuery } from "convex/react";
+import { useEffect } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useParams, Link } from "react-router-dom";
 import { Package, MapPin, Star, ExternalLink, Store } from "lucide-react";
@@ -24,10 +25,16 @@ const BUSINESS_LABEL: Record<string, string> = {
  */
 export default function StorefrontPage() {
   const { sellerId } = useParams<{ sellerId: string }>();
+  const recordProfileVisit = useMutation((api.notifications as any).recordProfileVisit);
   const data = useQuery(
     (api.users as any).getStorefront,
     sellerId ? { sellerId: sellerId as any } : "skip"
   ) as any;
+
+  useEffect(() => {
+    if (!sellerId) return;
+    void recordProfileVisit({ userId: sellerId as any, surface: "profile" }).catch(() => {});
+  }, [sellerId, recordProfileVisit]);
 
   if (data === undefined) {
     return (

@@ -17,6 +17,17 @@ async function getCanonicalActiveUsers(ctx: any) {
   return activeUsers.filter((_user: any, index: number) => !shadowFlags[index]);
 }
 
+async function resolveUserImage(ctx: any, user: any) {
+  const value = user?.avatarStorageId ?? user?.image ?? user?.avatar;
+  if (!value) return undefined;
+  if (String(value).startsWith("http://") || String(value).startsWith("https://")) return value;
+  try {
+    return (await ctx.storage.getUrl(value as any)) ?? value;
+  } catch {
+    return value;
+  }
+}
+
 export const getLiveStats = query({
   args: {},
   handler: async (ctx) => {
@@ -43,7 +54,7 @@ export const getDirectory = query({
     const users: any[] = await getCanonicalActiveUsers(ctx);
     if (args.view === "members" || args.view === "vendors") {
       const filtered = args.view === "vendors" ? users.filter((user) => user.isSeller === true || user.role === "seller") : users;
-      return { items: filtered.sort((a, b) => b._creationTime - a._creationTime).map((user: any) => ({ _id: user._id, name: user.name ?? "Aurriq Member", image: user.image ?? user.avatar, businessType: user.businessType, serviceTypes: user.serviceTypes, customServiceDescription: user.customServiceDescription, lastSeenAt: user.lastSeenAt })) };
+      return { items: await Promise.all(filtered.sort((a, b) => b._creationTime - a._creationTime).map(async (user: any) => ({ _id: user._id, name: user.name ?? "Aurriq Member", image: await resolveUserImage(ctx, user), businessType: user.businessType, serviceTypes: user.serviceTypes, customServiceDescription: user.customServiceDescription, lastSeenAt: user.lastSeenAt }))) };
     }
 
     if (args.view === "products") {

@@ -42,6 +42,7 @@ async function enrichProduct(ctx: any, product: any) {
   const images = await Promise.all((product.images ?? []).map((m: string) => resolveMediaUrl(ctx, m)));
   const videos = await Promise.all((product.videos ?? []).map((m: string) => resolveMediaUrl(ctx, m)));
   const imageUrl = product.imageUrl ? await resolveMediaUrl(ctx, product.imageUrl) : (images[0] ?? "");
+  const sellerImage = seller ? await resolveMediaUrl(ctx, seller.avatarStorageId ?? seller.image ?? seller.avatar) : "";
   return {
     ...product,
     images,
@@ -50,7 +51,7 @@ async function enrichProduct(ctx: any, product: any) {
     seller: seller ? {
       _id: seller._id,
       name: seller.name,
-      image: seller.image ?? seller.avatar,
+      image: sellerImage,
       isVerified: seller.isVerified,
       businessType: seller.businessType,
       phone: seller.phone,

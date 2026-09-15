@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
-import { User, Mail, Shield, Camera, ArrowLeft, Loader2, Phone, Bell, Store, MapPin, Crosshair, AlertTriangle, Trash2 } from "lucide-react";
+import { User, Mail, Shield, Camera, ArrowLeft, Loader2, Phone, Bell, Store, MapPin, Crosshair, AlertTriangle, Trash2, Users, UserMinus } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { Authenticated, Unauthenticated } from "convex/react";
@@ -54,6 +54,19 @@ export default function ProfilePage() {
     api.users.resolveAvatarUrl,
     user?.avatarStorageId ? { storageId: user.avatarStorageId } : "skip"
   );
+  const followCounts = useQuery(
+    (api.follows as any).getFollowCounts,
+    user?._id ? { userId: user._id } : "skip"
+  ) as { followers: number; following: number } | undefined;
+  const followers = useQuery(
+    (api.follows as any).getFollowers,
+    user?._id ? { userId: user._id } : "skip"
+  ) as any[] | undefined;
+  const following = useQuery(
+    (api.follows as any).getFollowing,
+    user?._id ? { userId: user._id } : "skip"
+  ) as any[] | undefined;
+  const unfollow = useMutation((api.follows as any).unfollow);
 
   const [fullName, setFullName] = useState("");
   const [phone, setPhone] = useState("");
@@ -79,6 +92,8 @@ export default function ProfilePage() {
   const [newPassword, setNewPassword] = useState("");
   const [resetSent, setResetSent] = useState(false);
   const [resetMode, setResetMode] = useState<"reset" | "setup">("reset");
+  const [followDialog, setFollowDialog] = useState<"followers" | "following" | null>(null);
+  const [unfollowingId, setUnfollowingId] = useState<string | null>(null);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
@@ -241,6 +256,24 @@ export default function ProfilePage() {
   };
 
   const displayImage = avatarUrl ?? user?.image;
+  const activeFollowList = followDialog === "followers" ? followers : following;
+
+  const openPerson = (personId: string) => {
+    setFollowDialog(null);
+    navigate(`/storefront/${personId}`);
+  };
+
+  const handleUnfollow = async (personId: string, personName?: string) => {
+    setUnfollowingId(personId);
+    try {
+      await unfollow({ userId: personId });
+      toast.success(`Unfollowed ${personName ?? "user"}`);
+    } catch {
+      toast.error("Could not unfollow right now.");
+    } finally {
+      setUnfollowingId(null);
+    }
+  };
 
   const closeDeletion = () => {
     if (deleting) return;
@@ -356,6 +389,22 @@ export default function ProfilePage() {
                     ? BUSINESS_TYPES.find((b) => b.value === (user as any).businessType)?.label
                     : "Aurriq Member"}
                 </p>
+                <div className="mt-2 flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFollowDialog("followers")}
+                    className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                  >
+                    <span className="font-semibold text-foreground">{followCounts?.followers ?? 0}</span> followers
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFollowDialog("following")}
+                    className="rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground transition-colors hover:border-primary/50 hover:text-primary"
+                  >
+                    <span className="font-semibold text-foreground">{followCounts?.following ?? 0}</span> following
+                  </button>
+                </div>
               </div>
 
               <div className="ml-auto">
@@ -596,6 +645,67 @@ export default function ProfilePage() {
             </CardContent>
           </Card>
         </div>
+
+        <Dialog open={followDialog !== null} onOpenChange={(open) => !open && setFollowDialog(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle className="capitalize">{followDialog ?? "Connections"}</DialogTitle>
+              <DialogDescription>
+                {followDialog === "followers"
+                  ? "People following your Aurriq profile."
+                  : "People and stores you follow on Aurriq."}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="max-h-[420px] overflow-y-auto space-y-2">
+              {activeFollowList === undefined ? (
+                <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
+                  <Loader2 className="mr-2 size-4 animate-spin" /> Loading
+                </div>
+              ) : activeFollowList.length === 0 ? (
+                <div className="rounded-lg border border-dashed border-border py-8 text-center text-sm text-muted-foreground">
+                  No {followDialog} yet.
+                </div>
+              ) : (
+                activeFollowList.map((person) => (
+                  <div key={person._id} className="flex items-center gap-3 rounded-lg border border-border p-3">
+                    <button
+                      type="button"
+                      onClick={() => openPerson(person._id)}
+                      className="flex min-w-0 flex-1 items-center gap-3 text-left"
+                    >
+                      <div className="flex size-11 shrink-0 items-center justify-center overflow-hidden rounded-full bg-muted">
+                        {person.image ? (
+                          <img src={person.image} alt={person.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
+                        ) : (
+                          <Users className="size-5 text-muted-foreground" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{person.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {person.businessType ? String(person.businessType).replace("_", " ") : "Aurriq member"}
+                        </p>
+                      </div>
+                    </button>
+                    {followDialog === "following" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleUnfollow(person._id, person.name)}
+                        disabled={unfollowingId === person._id}
+                        className="shrink-0 gap-1.5"
+                      >
+                        {unfollowingId === person._id ? <Loader2 className="size-3.5 animate-spin" /> : <UserMinus className="size-3.5" />}
+                        Unfollow
+                      </Button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Dialog open={deletionOpen} onOpenChange={(open) => open ? setDeletionOpen(true) : closeDeletion()}>
           <DialogContent className="max-w-lg">

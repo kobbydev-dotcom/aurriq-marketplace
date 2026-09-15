@@ -113,6 +113,43 @@ export const markAllRead = mutation({
   },
 });
 
+export const recordProfileVisit = mutation({
+  args: {
+    userId: v.id("users"),
+    surface: v.optional(v.union(v.literal("profile"), v.literal("store"))),
+  },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) return false;
+    const visitor = await currentMarketplaceUser(ctx, identity);
+    if (!visitor || visitor._id === args.userId) return false;
+
+    const target = await ctx.db.get(args.userId);
+    if (!target) return false;
+
+    const surface = args.surface ?? "profile";
+    const title = surface === "store" ? "Store visit" : "Profile visit";
+    const body = `${visitor.name ?? "Someone"} viewed your ${surface === "store" ? "store" : "profile"}.`;
+
+    await ctx.db.insert("notifications", {
+      userId: args.userId,
+      type: surface === "store" ? "store_visit" : "profile_visit",
+      title,
+      body,
+      link: `/storefront/${visitor._id}`,
+      isRead: false,
+    });
+
+    await ctx.db.insert("activity", {
+      userId: args.userId,
+      action: body,
+      meta: { visitorId: visitor._id, surface },
+    });
+
+    return true;
+  },
+});
+
 // Current user's activity / sales history (most recent first).
 export const getMyActivity = query({
   args: {},

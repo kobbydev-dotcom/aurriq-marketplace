@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useQuery } from "convex/react";
+import { useEffect, useState } from "react";
+import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api.js";
 import { useSearchParams, Link } from "react-router-dom";
 import { Search, Package, MapPin, Loader2, Navigation, Store, Map as MapIcon, List, Heart, History, X } from "lucide-react";
@@ -230,6 +230,12 @@ export default function ShopPage() {
   
   // UPGRADE: Grab the seller ID from the URL if a client clicks over from DOABookPro
   const sellerIdParam = searchParams.get("sellerId") as Id<"users"> | null;
+  const recordProfileVisit = useMutation((api.notifications as any).recordProfileVisit);
+
+  useEffect(() => {
+    if (!sellerIdParam) return;
+    void recordProfileVisit({ userId: sellerIdParam, surface: "store" }).catch(() => {});
+  }, [sellerIdParam, recordProfileVisit]);
 
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch] = useDebounce(searchInput, 350);
