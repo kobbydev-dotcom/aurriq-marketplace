@@ -54,6 +54,123 @@ async function findEmailUser(ctx: any, email: string) {
   })[0] ?? null;
 }
 
+async function getAuthSubjectUser(ctx: any, authSubject: string | undefined) {
+  if (!authSubject) return null;
+  try {
+    return await ctx.db.get(authSubject as any);
+  } catch {
+    return null;
+  }
+}
+
+function hasValue(value: unknown) {
+  return value !== undefined && value !== null && value !== "";
+}
+
+async function mergeUserInto(ctx: any, duplicate: any, canonical: any) {
+  if (!duplicate || !canonical || duplicate._id === canonical._id) return canonical;
+
+  const copyFields = [
+    "name",
+    "email",
+    "image",
+    "phone",
+    "avatar",
+    "paymentMethod",
+    "paymentNetwork",
+    "paymentAccount",
+    "businessType",
+    "serviceTypes",
+    "customServiceDescription",
+    "notifyEmail",
+    "avatarStorageId",
+    "locationLabel",
+    "latitude",
+    "longitude",
+    "locationShared",
+    "doabookproSlug",
+    "marketplaceSubscriptionStatus",
+    "marketplacePlan",
+    "marketplaceSubscriptionSource",
+    "marketplacePaidUntil",
+    "marketplacePaymentReference",
+    "lastSeenAt",
+    "lastAccessNotifiedAt",
+  ];
+  const patch: Record<string, unknown> = {};
+  for (const field of copyFields) {
+    if (!hasValue(canonical[field]) && hasValue(duplicate[field])) patch[field] = duplicate[field];
+  }
+  if (isAnonymousPlaceholder(canonical.name) && !isAnonymousPlaceholder(duplicate.name)) patch.name = duplicate.name;
+  if (duplicate.isSeller === true) patch.isSeller = true;
+  if (duplicate.role === "seller" && !canonical.role) patch.role = "seller";
+  if (duplicate.isVerified === true) patch.isVerified = true;
+  if (duplicate.isPendingDeletion !== true && canonical.isPendingDeletion === true) {
+    patch.isPendingDeletion = false;
+    patch.deletionRequestedAt = undefined;
+    patch.deletionScheduledFor = undefined;
+  }
+  if (Object.keys(patch).length > 0) {
+    await ctx.db.patch(canonical._id, patch as any);
+    canonical = { ...canonical, ...patch };
+  }
+
+  const replace = async (table: string, predicate: (doc: any) => boolean, patchDoc: (doc: any) => Record<string, unknown>) => {
+    const docs = await ctx.db.query(table).collect();
+    for (const doc of docs.filter(predicate)) await ctx.db.patch(doc._id, patchDoc(doc));
+  };
+
+  await replace("messages", (d) => d.senderId === duplicate._id || d.receiverId === duplicate._id, (d) => ({ senderId: d.senderId === duplicate._id ? canonical._id : d.senderId, receiverId: d.receiverId === duplicate._id ? canonical._id : d.receiverId }));
+  await replace("cartItems", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+  await replace("notifications", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+  await replace("activity", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+  await replace("follows", (d) => d.followerId === duplicate._id || d.followeeId === duplicate._id, (d) => ({ followerId: d.followerId === duplicate._id ? canonical._id : d.followerId, followeeId: d.followeeId === duplicate._id ? canonical._id : d.followeeId }));
+  await replace("analyticsEvents", (d) => d.actorId === duplicate._id || d.sellerId === duplicate._id, (d) => ({ actorId: d.actorId === duplicate._id ? canonical._id : d.actorId, sellerId: d.sellerId === duplicate._id ? canonical._id : d.sellerId }));
+  await replace("reviews", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+  await replace("wishlist", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+  await replace("rfqs", (d) => d.buyerId === duplicate._id || d.sellerId === duplicate._id, (d) => ({ buyerId: d.buyerId === duplicate._id ? canonical._id : d.buyerId, sellerId: d.sellerId === duplicate._id ? canonical._id : d.sellerId }));
+  await replace("reports", (d) => d.reporterId === duplicate._id || d.targetSellerId === duplicate._id, (d) => ({ reporterId: d.reporterId === duplicate._id ? canonical._id : d.reporterId, targetSellerId: d.targetSellerId === duplicate._id ? canonical._id : d.targetSellerId }));
+  await replace("orders", (d) => d.userId === duplicate._id || d.buyerId === duplicate._id || d.sellerId === duplicate._id, (d) => ({ userId: d.userId === duplicate._id ? canonical._id : d.userId, buyerId: d.buyerId === duplicate._id ? canonical._id : d.buyerId, sellerId: d.sellerId === duplicate._id ? canonical._id : d.sellerId }));
+  await replace("products", (d) => d.sellerId === duplicate._id, () => ({ sellerId: canonical._id }));
+  await replace("authSessions", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+  await replace("authAccounts", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+  await replace("authVerificationCodes", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+  await replace("authVerifiers", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+  await replace("authRateLimits", (d) => d.userId === duplicate._id, () => ({ userId: canonical._id }));
+
+  if (duplicate.avatarStorageId && duplicate.avatarStorageId !== canonical.avatarStorageId && canonical.avatarStorageId) {
+    try { await ctx.storage.delete(duplicate.avatarStorageId as any); } catch { /* stale avatar cleanup is non-blocking */ }
+  }
+  await ctx.db.delete(duplicate._id);
+  return canonical;
+}
+
+async function canonicalUserForIdentity(ctx: any, identity: any, identityEmail?: string) {
+  const authSubject = stableAuthSubject(identity);
+  let user = await getAuthSubjectUser(ctx, authSubject);
+
+  const shadow = authSubject
+    ? await ctx.db.query("users").withIndex("by_auth_subject", (q: any) => q.eq("authSubject", authSubject)).unique()
+    : null;
+  if (user && shadow && shadow._id !== user._id) user = await mergeUserInto(ctx, shadow, user);
+  if (!user && shadow) user = shadow;
+
+  const tokenUser = await ctx.db
+    .query("users")
+    .withIndex("by_token", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+    .unique();
+  if (user && tokenUser && tokenUser._id !== user._id) user = await mergeUserInto(ctx, tokenUser, user);
+  if (!user && tokenUser) user = tokenUser;
+
+  if (identityEmail) {
+    const emailUser = await findEmailUser(ctx, identityEmail);
+    if (user && emailUser && emailUser._id !== user._id) user = await mergeUserInto(ctx, emailUser, user);
+    if (!user && emailUser) user = emailUser;
+  }
+
+  return { user, authSubject };
+}
+
 async function findNameUser(ctx: any, name: string, excludeUserId?: any) {
   const normalized = normalizeName(name);
   const users = await ctx.db.query("users").collect();
@@ -115,11 +232,11 @@ export const nameAvailability = query({
     if (!name) return { available: false, message: "Enter a display name." };
     const identity = await ctx.auth.getUserIdentity();
     const authSubject = identity ? stableAuthSubject(identity) : undefined;
-    const current = authSubject
-      ? await ctx.db.query("users").withIndex("by_auth_subject", (q: any) => q.eq("authSubject", authSubject)).unique()
-      : identity
-        ? await ctx.db.query("users").withIndex("by_token", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier)).unique()
-        : null;
+    const current = identity
+      ? await getAuthSubjectUser(ctx, authSubject)
+        ?? (authSubject ? await ctx.db.query("users").withIndex("by_auth_subject", (q: any) => q.eq("authSubject", authSubject)).unique() : null)
+        ?? await ctx.db.query("users").withIndex("by_token", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier)).unique()
+      : null;
     const user = await findNameUser(ctx, name, current?._id);
     return user
       ? { available: false, message: "That display name is already in use. Choose another one." }
@@ -254,14 +371,9 @@ export const storeUser = mutation({
     const providerImage = identity.picture || (identity as any).pictureUrl || undefined;
     const accessNow = Date.now();
 
-    // Prefer the auth token, but fall back to email so a login round-trip or
-    // provider change cannot create a second anonymous marketplace profile.
-    let user = authSubject
-      ? await ctx.db
-        .query("users")
-        .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
-        .unique()
-      : null;
+    // Convex Auth stores the signed-in account in `users` too. Treat that auth
+    // row as the marketplace member, and merge any older shadow profile into it.
+    let { user } = await canonicalUserForIdentity(ctx, identity, identityEmail);
 
     if (user === null) {
       const legacySubject = typeof (identity as any).subject === "string"
@@ -342,7 +454,13 @@ export const current = query({
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return null;
 
+    const identityEmail = typeof (identity as any).email === "string"
+      ? String((identity as any).email).trim().toLowerCase()
+      : undefined;
     const authSubject = stableAuthSubject(identity);
+    const authUser = await getAuthSubjectUser(ctx, authSubject);
+    if (authUser) return authUser;
+
     if (authSubject) {
       const user = await ctx.db
         .query("users")
@@ -360,10 +478,13 @@ export const current = query({
       if (legacyUser) return legacyUser;
     }
 
-    return await ctx.db
+    const tokenUser = await ctx.db
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
+    if (tokenUser) return tokenUser;
+
+    return identityEmail ? await findEmailUser(ctx, identityEmail) : null;
   },
 });
 
@@ -393,19 +514,11 @@ export const updateProfile = mutation({
       throw new Error("Not authenticated");
     }
 
-    // 1. Try to find the user
-    let user = await ctx.db
-      .query("users")
-      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier!))
-      .unique();
-
     const identityEmail = typeof (identity as any).email === "string"
       ? String((identity as any).email).trim().toLowerCase()
       : undefined;
 
-    if (!user && identityEmail) {
-      user = await findEmailUser(ctx, identityEmail);
-    }
+    let { user, authSubject } = await canonicalUserForIdentity(ctx, identity, identityEmail);
 
     if (typeof args.name === "string") {
       const requestedName = args.name.trim();
@@ -428,6 +541,7 @@ export const updateProfile = mutation({
         paymentMethod: args.paymentMethod,
         paymentNetwork: args.paymentNetwork,
         paymentAccount: args.paymentAccount,
+        authSubject,
       });
       user = await ctx.db.get(userId);
     }
@@ -453,6 +567,11 @@ export const updateProfile = mutation({
     if (typeof args.doabookproSlug === "string") patch.doabookproSlug = args.doabookproSlug.trim();
     if (typeof args.isSeller === "boolean") patch.isSeller = args.isSeller;
     if (args.role === "seller") patch.isSeller = true;
+    if (identityEmail && !user?.email) patch.email = identityEmail;
+    if (authSubject && !user?.authSubject && user?._id !== authSubject) patch.authSubject = authSubject;
+    if (!user?.tokenIdentifier || user.tokenIdentifier !== identity.tokenIdentifier) {
+      patch.tokenIdentifier = identity.tokenIdentifier;
+    }
 
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(user!._id, patch as any);
@@ -480,7 +599,7 @@ export const sendPasswordResetNotice = action({
 export const findByEmail = query({
   args: { email: v.string() },
   handler: async (ctx, args) => {
-    const user = await ctx.db.query("users").withIndex("email", (q) => q.eq("email", args.email.trim().toLowerCase())).unique();
+    const user = await findEmailUser(ctx, args.email.trim().toLowerCase());
     if (!user) return null;
     return { email: user.email, phone: user.phone };
   },
@@ -491,10 +610,14 @@ export const hasPasswordAccount = query({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) return false;
+    const identityEmail = typeof (identity as any).email === "string"
+      ? String((identity as any).email).trim().toLowerCase()
+      : undefined;
     const authSubject = stableAuthSubject(identity);
-    const user = authSubject
-      ? await ctx.db.query("users").withIndex("by_auth_subject", (q: any) => q.eq("authSubject", authSubject)).unique()
-      : await ctx.db.query("users").withIndex("by_token", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier)).unique();
+    const user = await getAuthSubjectUser(ctx, authSubject)
+      ?? (authSubject ? await ctx.db.query("users").withIndex("by_auth_subject", (q: any) => q.eq("authSubject", authSubject)).unique() : null)
+      ?? await ctx.db.query("users").withIndex("by_token", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier)).unique()
+      ?? (identityEmail ? await findEmailUser(ctx, identityEmail) : null);
     if (!user) return false;
     const accounts = await ctx.db.query("authAccounts").withIndex("userIdAndProvider", (q: any) => q.eq("userId", user._id).eq("provider", "password")).collect();
     return accounts.length > 0;

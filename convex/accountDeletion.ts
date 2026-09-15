@@ -4,17 +4,73 @@ import { v } from "convex/values";
 
 const SEVEN_DAYS = 7 * 24 * 60 * 60 * 1000;
 
-async function currentUser(ctx: any) {
+function stableAuthSubject(identity: any) {
+  const subject = String(identity?.subject ?? "").trim();
+  return subject.split("|")[0] || undefined;
+}
+
+function identityEmail(identity: any) {
+  const email = typeof identity?.email === "string" ? identity.email.trim().toLowerCase() : "";
+  return email || undefined;
+}
+
+async function getUserById(ctx: any, userId: string | undefined) {
+  if (!userId) return null;
+  try {
+    return await ctx.db.get(userId as any);
+  } catch {
+    return null;
+  }
+}
+
+async function addUser(candidateMap: Map<string, any>, user: any) {
+  if (user) candidateMap.set(String(user._id), user);
+}
+
+async function findCurrentUserGroup(ctx: any) {
   const identity = await ctx.auth.getUserIdentity();
   if (!identity) throw new Error("Not authenticated");
-  const authSubject = String(identity.subject ?? "").trim().split("|")[0];
-  const stable = authSubject
-    ? await ctx.db.query("users").withIndex("by_auth_subject", (q: any) => q.eq("authSubject", authSubject)).unique()
-    : null;
-  const user = stable
-    ?? await ctx.db.query("users").withIndex("by_token", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier)).unique();
-  if (!user) throw new Error("Account profile not found");
-  return user;
+  const authSubject = stableAuthSubject(identity);
+  const email = identityEmail(identity);
+  const candidates = new Map<string, any>();
+
+  await addUser(candidates, await getUserById(ctx, authSubject));
+
+  if (authSubject) {
+    const subjectUsers = await ctx.db
+      .query("users")
+      .withIndex("by_auth_subject", (q: any) => q.eq("authSubject", authSubject))
+      .collect();
+    for (const user of subjectUsers) await addUser(candidates, user);
+  }
+
+  if (identity.tokenIdentifier) {
+    const tokenUsers = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q: any) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .collect();
+    for (const user of tokenUsers) await addUser(candidates, user);
+  }
+
+  if (email) {
+    const emailUsers = await ctx.db
+      .query("users")
+      .withIndex("email", (q: any) => q.eq("email", email))
+      .collect();
+    for (const user of emailUsers) await addUser(candidates, user);
+
+    const relatedAccounts = (await ctx.db.query("authAccounts").collect()).filter((account: any) => {
+      return String(account.providerAccountId ?? "").trim().toLowerCase() === email
+        || String(account.emailVerified ?? "").trim().toLowerCase() === email;
+    });
+    for (const account of relatedAccounts) {
+      await addUser(candidates, await ctx.db.get(account.userId));
+    }
+  }
+
+  const users = [...candidates.values()];
+  if (users.length === 0) throw new Error("Account profile not found");
+  return users;
 }
 
 async function deleteWhere(ctx: any, table: string, predicate: (doc: any) => boolean) {
@@ -25,14 +81,17 @@ async function deleteWhere(ctx: any, table: string, predicate: (doc: any) => boo
 export const scheduleDeletion = mutation({
   args: {},
   handler: async (ctx) => {
-    const user = await currentUser(ctx);
+    const users = await findCurrentUserGroup(ctx);
     const scheduledFor = Date.now() + SEVEN_DAYS;
-    await ctx.db.patch(user._id, {
-      isPendingDeletion: true,
-      deletionRequestedAt: Date.now(),
-      deletionScheduledFor: scheduledFor,
-    });
-    await ctx.scheduler.runAt(scheduledFor, internal.accountDeletion.purgeScheduledAccount, { userId: user._id });
+    const requestedAt = Date.now();
+    for (const user of users) {
+      await ctx.db.patch(user._id, {
+        isPendingDeletion: true,
+        deletionRequestedAt: requestedAt,
+        deletionScheduledFor: scheduledFor,
+      });
+      await ctx.scheduler.runAt(scheduledFor, internal.accountDeletion.purgeScheduledAccount, { userId: user._id });
+    }
     return { scheduledFor };
   },
 });
@@ -40,20 +99,22 @@ export const scheduleDeletion = mutation({
 export const reactivateAccount = mutation({
   args: {},
   handler: async (ctx) => {
-    const user = await currentUser(ctx);
-    await ctx.db.patch(user._id, {
-      isPendingDeletion: false,
-      deletionRequestedAt: undefined,
-      deletionScheduledFor: undefined,
-    });
+    const users = await findCurrentUserGroup(ctx);
+    for (const user of users) {
+      await ctx.db.patch(user._id, {
+        isPendingDeletion: false,
+        deletionRequestedAt: undefined,
+        deletionScheduledFor: undefined,
+      });
+    }
   },
 });
 
 export const purgeImmediately = mutation({
   args: {},
   handler: async (ctx) => {
-    const user = await currentUser(ctx);
-    await purgeUser(ctx, user._id);
+    const users = await findCurrentUserGroup(ctx);
+    await purgeUsers(ctx, users.map((user) => user._id));
   },
 });
 
@@ -62,9 +123,24 @@ export const purgeScheduledAccount = internalMutation({
   handler: async (ctx, args) => {
     const user: any = await ctx.db.get(args.userId);
     if (!user || !user.isPendingDeletion || !user.deletionScheduledFor || user.deletionScheduledFor > Date.now()) return;
-    await purgeUser(ctx, args.userId);
+    const userIds = [args.userId];
+    if (user.email) {
+      const related = await ctx.db
+        .query("users")
+        .withIndex("email", (q: any) => q.eq("email", String(user.email).trim().toLowerCase()))
+        .collect();
+      userIds.push(...related.filter((relatedUser: any) => relatedUser.isPendingDeletion).map((relatedUser: any) => relatedUser._id));
+    }
+    await purgeUsers(ctx, userIds);
   },
 });
+
+async function purgeUsers(ctx: any, userIds: any[]) {
+  const uniqueIds = [...new Set(userIds.map((userId) => String(userId)))];
+  for (const userId of uniqueIds) {
+    if (await ctx.db.get(userId as any)) await purgeUser(ctx, userId as any);
+  }
+}
 
 async function purgeUser(ctx: any, userId: any) {
   const products = await ctx.db.query("products").withIndex("by_seller", (q: any) => q.eq("sellerId", userId)).collect();

@@ -1,14 +1,29 @@
 import { query } from "./_generated/server";
 import { v } from "convex/values";
 
+async function isShadowUser(ctx: any, user: any) {
+  if (!user.authSubject || user.authSubject === user._id) return false;
+  try {
+    return Boolean(await ctx.db.get(user.authSubject as any));
+  } catch {
+    return false;
+  }
+}
+
+async function getCanonicalActiveUsers(ctx: any) {
+  const users = await ctx.db.query("users").collect();
+  const activeUsers = users.filter((user: any) => !user.isPendingDeletion);
+  const shadowFlags = await Promise.all(activeUsers.map((user: any) => isShadowUser(ctx, user)));
+  return activeUsers.filter((_, index) => !shadowFlags[index]);
+}
+
 export const getLiveStats = query({
   args: {},
   handler: async (ctx) => {
-    const users = await ctx.db.query("users").collect();
+    const activeUsers = await getCanonicalActiveUsers(ctx);
     const products = await ctx.db.query("products").collect();
     const orders = await ctx.db.query("orders").collect();
 
-    const activeUsers = users.filter((user: any) => !user.isPendingDeletion);
     const vendors = activeUsers.filter((user: any) => user.isSeller === true || user.role === "seller");
     const liveProducts = products.filter((product: any) => product.isActive && product.stockQuantity > 0);
     const completedSales = orders.filter((order: any) => !["cancelled", "awaiting_payment"].includes(order.status));
@@ -25,7 +40,7 @@ export const getLiveStats = query({
 export const getDirectory = query({
   args: { view: v.union(v.literal("members"), v.literal("vendors"), v.literal("products"), v.literal("sales")) },
   handler: async (ctx, args) => {
-    const users: any[] = (await ctx.db.query("users").collect()).filter((user: any) => !user.isPendingDeletion);
+    const users: any[] = await getCanonicalActiveUsers(ctx);
     if (args.view === "members" || args.view === "vendors") {
       const filtered = args.view === "vendors" ? users.filter((user) => user.isSeller === true || user.role === "seller") : users;
       return { items: filtered.sort((a, b) => b._creationTime - a._creationTime).map((user: any) => ({ _id: user._id, name: user.name ?? "Aurriq Member", image: user.image ?? user.avatar, businessType: user.businessType, serviceTypes: user.serviceTypes, customServiceDescription: user.customServiceDescription, lastSeenAt: user.lastSeenAt })) };
