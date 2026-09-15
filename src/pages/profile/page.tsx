@@ -251,21 +251,24 @@ export default function ProfilePage() {
   };
 
   const confirmDeletion = async () => {
+    const requiresPassword = hasPasswordAccount !== false;
     const password = deletionPasswords[0].trim();
-    if (!password || (deletionMode === "immediate" && deletionPasswords.some((value) => value !== password))) {
+    if (requiresPassword && (!password || (deletionMode === "immediate" && deletionPasswords.some((value) => value !== password)))) {
       toast.error(deletionMode === "immediate" ? "Enter the same password in all three fields." : "Enter your password to continue.");
       return;
     }
-    if (!user?.email) {
+    if (requiresPassword && !user?.email) {
       toast.error("This account has no email available for password verification.");
       return;
     }
     setDeleting(true);
     try {
-      await signIn("password", { email: user.email, password, flow: "signIn" });
+      if (requiresPassword) await signIn("password", { email: user!.email, password, flow: "signIn" });
       if (deletionMode === "immediate") {
-        // Allow the refreshed Convex identity from password verification to settle before deleting.
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        if (requiresPassword) {
+          // Allow the refreshed Convex identity from password verification to settle before deleting.
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
         await purgeImmediately();
         await signOut();
         window.location.assign("/");
@@ -602,8 +605,12 @@ export default function ProfilePage() {
                 {deletionStep === "warning"
                   ? "You will lose everything you have built on Aurriq, including products, clients, pending sales, messages, and account records."
                   : deletionMode === "immediate"
-                    ? "Immediate deletion cannot be undone. Enter your password three times to erase your account now."
-                    : "Enter your password. Your account will be scheduled for permanent deletion in 7 days, and you can reactivate it any time before then."}
+                    ? hasPasswordAccount === false
+                      ? "Immediate deletion cannot be undone. Confirm below to erase your Google-linked account now."
+                      : "Immediate deletion cannot be undone. Enter your password three times to erase your account now."
+                    : hasPasswordAccount === false
+                      ? "Confirm below to schedule permanent deletion in 7 days. You can reactivate your Google-linked account before then."
+                      : "Enter your password. Your account will be scheduled for permanent deletion in 7 days, and you can reactivate it any time before then."}
               </DialogDescription>
             </DialogHeader>
 
@@ -616,10 +623,16 @@ export default function ProfilePage() {
               </div>
             ) : (
               <div className="space-y-3">
-                {deletionPasswords.map((value, index) => (
+                {hasPasswordAccount !== false && deletionPasswords.map((value, index) => (
                   <Input key={index} type="password" placeholder={deletionMode === "immediate" ? `Password confirmation ${index + 1}` : "Your password"} value={deletionMode === "scheduled" && index > 0 ? "" : value} disabled={deletionMode === "scheduled" && index > 0} onChange={(event) => setDeletionPasswords((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} />
                 ))}
-                <p className="text-xs text-muted-foreground">Your password is verified through Aurriq sign-in and is never stored by this deletion form.</p>
+                {hasPasswordAccount === false ? (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-muted-foreground">
+                    This Google-linked account has no Aurriq password. Your confirmation here is final and cannot be recovered after deletion.
+                  </div>
+                ) : (
+                  <p className="text-xs text-muted-foreground">Your password is verified through Aurriq sign-in and is never stored by this deletion form.</p>
+                )}
                 <DialogFooter><Button variant="outline" onClick={() => setDeletionStep("warning")} disabled={deleting}>Back</Button><Button variant="destructive" onClick={confirmDeletion} disabled={deleting}>{deleting ? "Verifying..." : deletionMode === "immediate" ? "Erase everything now" : "Schedule deletion"}</Button></DialogFooter>
               </div>
             )}
