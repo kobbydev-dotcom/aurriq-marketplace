@@ -367,7 +367,7 @@ export const storeUser = mutation({
   handler: async (ctx) => {
     const identity = await ctx.auth.getUserIdentity();
     if (!identity) {
-      throw new Error("Called storeUser without authentication");
+      return null;
     }
 
     const identityEmail = typeof (identity as any).email === "string"

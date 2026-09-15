@@ -4,7 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useAction, useConvex, useMutation } from "convex/react";
+import { useAction, useConvex } from "convex/react";
 import { api } from "../../../convex/_generated/api.js";
 import * as Dialog from "@radix-ui/react-dialog";
 import { X, Sparkles, Mail, Chrome, Laptop, Apple, Facebook } from "lucide-react";
@@ -25,9 +25,8 @@ type LoginFormValues = z.infer<typeof loginSchema>;
 type SignUpFormValues = z.infer<typeof signUpSchema>;
 
 export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange: (open: boolean) => void }) {
-  const { signIn, signOut } = useAuthActions();
+  const { signIn } = useAuthActions();
   const convex = useConvex();
-  const storeUser = useMutation((api as any).users.storeUser);
   const sendPasswordResetNotice = useAction((api as any).users.sendPasswordResetNotice);
   const [activeAccordion, setActiveAccordion] = useState<string | null>("email");
   const [isFullSignUpFlow, setIsFullSignUpFlow] = useState(false);
@@ -125,12 +124,9 @@ export function AuthModal({ open, onOpenChange }: { open: boolean; onOpenChange:
       const toastId = toast.loading("Connecting with Google...");
       try {
         await signIn("google");
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        await storeUser();
         toast.success("Welcome to Aurriq!", { id: toastId });
         onOpenChange(false);
       } catch (err) {
-        await signOut();
         toast.error(err instanceof Error ? err.message : "Google authentication failed. Please try again.", { id: toastId });
       } finally {
         setSubmitting(false);
