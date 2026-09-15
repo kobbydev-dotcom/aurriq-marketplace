@@ -61,6 +61,10 @@ async function deleteUserRelatedRecords(ctx: any, userId: any) {
   await ctx.db.delete(userId);
 }
 
+function isAnonymousBuyer(user: any) {
+  return String(user.name ?? "").trim().toLowerCase() === "anonymous buyer";
+}
+
 export const purgeAllAurriqTestData = mutation({
   args: { confirmation: v.literal("PURGE_ALL_AURRIQ_TEST_DATA") },
   handler: async (ctx) => {
@@ -93,6 +97,26 @@ export const purgeAllAurriqTestData = mutation({
     }
 
     return { purged: true, counts };
+  },
+});
+
+export const purgeAnonymousBuyers = mutation({
+  args: { confirmation: v.literal("PURGE_ANONYMOUS_BUYERS") },
+  handler: async (ctx, args) => {
+    if (args.confirmation !== "PURGE_ANONYMOUS_BUYERS") {
+      throw new Error("Invalid confirmation");
+    }
+
+    const users = await ctx.db.query("users").collect();
+    const anonymousBuyers = users.filter(isAnonymousBuyer);
+    const deleted: string[] = [];
+
+    for (const user of anonymousBuyers) {
+      await deleteUserRelatedRecords(ctx, user._id);
+      deleted.push(user._id as any);
+    }
+
+    return { deleted, count: deleted.length };
   },
 });
 

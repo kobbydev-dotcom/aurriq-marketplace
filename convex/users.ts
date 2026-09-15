@@ -32,6 +32,13 @@ function identityDisplayName(identity: any, email: string | undefined) {
   return humanizeEmailLocalPart(email);
 }
 
+function requiredIdentityDisplayName(identity: any, email: string | undefined) {
+  const providerName = identityDisplayName(identity, email);
+  if (providerName) return providerName;
+  if (email) return humanizeEmailLocalPart(email);
+  return "Aurriq Member";
+}
+
 function stableAuthSubject(identity: any) {
   const subject = typeof identity?.subject === "string" ? identity.subject.trim() : "";
   return subject.split("|")[0] || undefined;
@@ -367,7 +374,7 @@ export const storeUser = mutation({
       ? String((identity as any).email).trim().toLowerCase()
       : undefined;
     const authSubject = stableAuthSubject(identity);
-    const providerName = identityDisplayName(identity, identityEmail);
+    const providerName = requiredIdentityDisplayName(identity, identityEmail);
     const providerImage = identity.picture || (identity as any).pictureUrl || undefined;
     const accessNow = Date.now();
 
@@ -432,15 +439,12 @@ export const storeUser = mutation({
       }
     }
 
-    const name = providerName || "Anonymous Buyer";
-    const imageUrl = providerImage;
-
     return await ctx.db.insert("users", {
       tokenIdentifier: identity.tokenIdentifier!,
       authSubject,
       email: identityEmail,
-      name,
-      image: imageUrl,
+      name: providerName,
+      image: providerImage,
       isSeller: false,
       isVerified: false,
       lastSeenAt: Date.now(),
