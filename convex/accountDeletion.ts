@@ -118,6 +118,41 @@ export const purgeImmediately = mutation({
   },
 });
 
+export const deleteVendorAccountOnly = mutation({
+  args: {},
+  handler: async (ctx) => {
+    const users = await findCurrentUserGroup(ctx);
+    const sellerUsers = users.filter((user: any) => user.isSeller || user.role === "seller" || user.marketplaceSubscriptionStatus === "active");
+    if (sellerUsers.length === 0) throw new Error("No active vendor account found");
+
+    for (const user of sellerUsers) {
+      const products = await ctx.db.query("products").withIndex("by_seller", (q: any) => q.eq("sellerId", user._id)).collect();
+      for (const product of products) {
+        await ctx.db.patch(product._id, {
+          isActive: false,
+        } as any);
+      }
+
+      await ctx.db.patch(user._id, {
+        isSeller: false,
+        role: undefined,
+        marketplaceSubscriptionStatus: "vendor_deleted",
+        marketplacePaidUntil: undefined,
+        marketplacePaymentReference: undefined,
+        marketplaceSubscriptionAmount: undefined,
+      } as any);
+
+      await ctx.db.insert("activity", {
+        userId: user._id,
+        action: "vendor_account_deleted",
+        meta: { message: "Vendor account deleted while keeping buyer account active.", at: Date.now() },
+      } as any);
+    }
+
+    return { deletedVendorAccount: true };
+  },
+});
+
 export const purgeScheduledAccount = internalMutation({
   args: { userId: v.id("users") },
   handler: async (ctx, args) => {

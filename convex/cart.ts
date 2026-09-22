@@ -22,7 +22,17 @@ export const getCartItems = query({
     const enriched = await Promise.all(
       items.map(async (item) => {
         const product = await ctx.db.get(item.productId);
-        return { ...item, product };
+        const seller = product ? await ctx.db.get(product.sellerId) : null;
+        return {
+          ...item,
+          product: product ? {
+            ...product,
+            seller: seller ? {
+              name: seller.name,
+              paymentReceiptModes: (seller as any).paymentReceiptModes,
+            } : null,
+          } : null,
+        };
       })
     );
 

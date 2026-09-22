@@ -21,6 +21,7 @@ export default defineSchema({
     paymentMethod: v.optional(v.string()),
     paymentNetwork: v.optional(v.string()),
     paymentAccount: v.optional(v.string()),
+    paymentReceiptModes: v.optional(v.any()),
     // Seller business type (salon, barbershop, nail tech, etc.) — shown to buyers.
     businessType: v.optional(v.string()),
     serviceTypes: v.optional(v.array(v.string())),
@@ -41,6 +42,7 @@ export default defineSchema({
     marketplaceSubscriptionStatus: v.optional(v.string()),
     marketplacePlan: v.optional(v.string()),
     marketplaceSubscriptionSource: v.optional(v.string()),
+    marketplaceSubscriptionAmount: v.optional(v.number()),
     marketplacePaidUntil: v.optional(v.number()),
     marketplacePaymentReference: v.optional(v.string()),
     deletionRequestedAt: v.optional(v.number()),
@@ -84,6 +86,7 @@ export default defineSchema({
       v.object({
         mode: v.string(),
         percent: v.optional(v.number()),
+        acceptedModes: v.optional(v.array(v.string())),
       })
     ),
     // Denormalized seller location (copied at create/update) for distance filtering.
@@ -222,6 +225,7 @@ export default defineSchema({
     paymentMethod: v.optional(v.string()),
     paymentNetwork: v.optional(v.string()),
     paymentAccount: v.optional(v.string()),
+    sellerPaymentInstructions: v.optional(v.any()),
     paymentReference: v.optional(v.string()),
     paymentStatus: v.optional(v.string()),
     paymentProviderTxnId: v.optional(v.string()),

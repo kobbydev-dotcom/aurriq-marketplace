@@ -2,7 +2,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api.js";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import { Link, useNavigate } from "react-router-dom";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Trash2, Plus, Minus, ShoppingBag, ArrowLeft, Shield, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -35,8 +35,8 @@ type CartItem = {
     promoPrice?: number;
     stockQuantity: number;
     isActive: boolean;
-    seller?: { name?: string } | null;
-    paymentOptions?: { mode: string; percent?: number } | null;
+    seller?: { name?: string; paymentReceiptModes?: any } | null;
+    paymentOptions?: { mode: string; percent?: number; acceptedModes?: string[] } | null;
   } | null;
 };
 
@@ -171,6 +171,20 @@ function CheckoutDialog({
     const m = modeOf(i.product);
     return m === "momo" || m === "partial";
   });
+  const canUseMomo = items.some((i) => (i.product?.paymentOptions?.acceptedModes ?? ["momo"]).includes("momo"));
+  const canUseBank = items.some((i) => (i.product?.paymentOptions?.acceptedModes ?? ["momo"]).includes("bank_transfer"));
+  const canUseCashOnDelivery = items.some((i) => (i.product?.paymentOptions?.acceptedModes ?? []).includes("cash_on_delivery"));
+
+  useEffect(() => {
+    const available = [
+      canUseMomo ? "mobile_money" : null,
+      canUseBank ? "bank_transfer" : null,
+      canUseCashOnDelivery ? "cash_on_delivery" : null,
+    ].filter(Boolean) as string[];
+    if (available.length > 0 && !available.includes(paymentMethod)) {
+      setPaymentMethod(available[0]);
+    }
+  }, [canUseMomo, canUseBank, canUseCashOnDelivery, paymentMethod]);
 
   // Amount due online right now (full for momo, deposit % for partial).
   const dueNow = items.reduce((sum, i) => {
@@ -199,7 +213,7 @@ function CheckoutDialog({
         receiptEmail: receiptEmail || undefined,
       });
       if (result.paymentPending) {
-        toast.success("Payment initiated. Complete it on your phone — your receipt follows by SMS + email.");
+        toast.success("Order placed. Send payment using the displayed seller details; your receipt follows after seller confirmation.");
       } else {
         toast.success(`Order placed! ${result.orderIds.length} item(s) confirmed.`);
       }
@@ -253,11 +267,14 @@ function CheckoutDialog({
                 if (!p) return null;
                 const m = modeOf(p);
                 const price = (p.promoPrice ?? p.originalPrice) * i.quantity;
+                const accepted = p.paymentOptions?.acceptedModes ?? [m === "partial" ? "momo" : m];
                 const label =
                   m === "cod" ? "Cash on delivery"
                   : m === "negotiable" ? "Negotiable with seller"
                   : m === "partial" ? `Deposit ${Math.min(100, Math.max(1, p.paymentOptions?.percent ?? 50))}% now`
-                  : "Pay online now";
+                  : accepted.includes("bank_transfer") && accepted.includes("momo") ? "MoMo or bank transfer"
+                  : accepted.includes("bank_transfer") ? "Bank transfer"
+                  : "Mobile Money";
                 return (
                   <div key={i._id} className="flex items-center justify-between px-3 py-2 text-xs">
                     <span className="truncate pr-2">{p.name} × {i.quantity}</span>
@@ -279,9 +296,10 @@ function CheckoutDialog({
             <Label>Payment Method</Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {[
-                { value: "mobile_money", label: "Mobile Money", description: "MoMo-ready checkout for instant payment confirmation" },
-                { value: "cash_on_delivery", label: "Cash on Delivery", description: "Pay when you receive the items" },
-              ].map((option) => (
+                canUseMomo ? { value: "mobile_money", label: "Mobile Money", description: "Send to the seller's MoMo number and use your name as reference" } : null,
+                canUseBank ? { value: "bank_transfer", label: "Bank Transfer", description: "Transfer to the seller's bank account and use your name as reference" } : null,
+                canUseCashOnDelivery ? { value: "cash_on_delivery", label: "Cash on Delivery", description: "Pay when you receive the items" } : null,
+              ].filter(Boolean).map((option: any) => (
                 <button
                   key={option.value}
                   type="button"
@@ -319,6 +337,29 @@ function CheckoutDialog({
               </div>
             </div>
           )}
+          {hasOnline && ["mobile_money", "bank_transfer"].includes(paymentMethod) && (
+            <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3 text-xs">
+              <p className="font-medium text-sm">Seller payment details</p>
+              {items.map((i) => {
+                const p = i.product;
+                if (!p) return null;
+                const accepted = p.paymentOptions?.acceptedModes ?? ["momo"];
+                const modes = p.seller?.paymentReceiptModes ?? {};
+                return (
+                  <div key={i._id} className="space-y-1 border-t border-border/50 pt-2 first:border-t-0 first:pt-0">
+                    <p className="font-medium">{p.seller?.name ?? "Seller"} - {p.name}</p>
+                    {paymentMethod === "mobile_money" && accepted.includes("momo") && modes.momo?.enabled && (
+                      <p className="text-muted-foreground">MoMo: {modes.momo.number} {modes.momo.name ? `(${modes.momo.name})` : ""} {modes.momo.network ? `- ${String(modes.momo.network).toUpperCase()}` : ""}</p>
+                    )}
+                    {paymentMethod === "bank_transfer" && accepted.includes("bank_transfer") && modes.bank?.enabled && (
+                      <p className="text-muted-foreground">Bank: {modes.bank.accountName} - {modes.bank.accountNumber} - {modes.bank.bankName}{modes.bank.branch ? `, ${modes.bank.branch}` : ""}</p>
+                    )}
+                  </div>
+                );
+              })}
+              <p className="text-muted-foreground">Use your name or store/order name as the payment reference so the seller can confirm it quickly.</p>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label htmlFor="note">Order note (optional)</Label>
             <Textarea
@@ -331,7 +372,7 @@ function CheckoutDialog({
           </div>
           <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 flex gap-2 text-xs text-amber-400">
             <Shield className="size-4 shrink-0 mt-0.5" />
-            <span>Only pay through official Aurriq checkout. Mobile Money details are captured here so your order can be confirmed inside the marketplace.</span>
+            <span>Use your name as the payment reference. The seller will mark payment received, then Aurriq sends your receipt and updates tracking.</span>
           </div>
           <DialogFooter className="gap-2">
             <Button type="button" variant="ghost" onClick={onClose} disabled={loading}>Cancel</Button>

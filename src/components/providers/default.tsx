@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import { api } from "../../../convex/_generated/api.js";
 import { QueryClientProvider } from "./query-client.tsx";
 import { ThemeProvider } from "./theme.tsx";
-import { Toaster } from "../ui/sonner.tsx";
 import { TooltipProvider } from "../ui/tooltip.tsx";
 
 // Initialize the client here
@@ -48,7 +47,6 @@ export function DefaultProviders({ children }: { children: React.ReactNode }) {
       <QueryClientProvider>
         <TooltipProvider>
           <ThemeProvider>
-            <Toaster />
             {children}
           </ThemeProvider>
         </TooltipProvider>

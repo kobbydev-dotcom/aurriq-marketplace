@@ -48,11 +48,22 @@ export const placeOrder = mutation({
       return mode === "momo" || mode === "partial";
     });
 
-    const isOnlineCheckout = anyOnline && args.paymentMethod === "mobile_money";
-    const paymentReference = isOnlineCheckout ? `AURRIQ-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}` : undefined;
+    const requestedReceiptMode = args.paymentMethod === "mobile_money" ? "momo" : args.paymentMethod;
+    for (const item of cartItems) {
+      const product = productMap.get(item.productId);
+      if (!product) continue;
+      const mode = effectiveMode(product);
+      const acceptedModes = product.paymentOptions?.acceptedModes ?? [mode === "partial" ? "momo" : mode];
+      if (requestedReceiptMode && !acceptedModes.includes(requestedReceiptMode) && (mode === "momo" || mode === "partial")) {
+        throw new ConvexError({ code: "BAD_REQUEST", message: `"${product.name}" does not accept that payment method` });
+      }
+    }
 
-    if (isOnlineCheckout && !(args.paymentAccount || args.buyerPhone)) {
-      throw new ConvexError({ code: "BAD_REQUEST", message: "Provide a mobile money number to complete checkout" });
+    const isManualReceiptPayment = anyOnline && ["mobile_money", "bank_transfer"].includes(args.paymentMethod ?? "");
+    const paymentReference = isManualReceiptPayment ? `AURRIQ-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}` : undefined;
+
+    if (isManualReceiptPayment && !(args.paymentAccount || args.buyerPhone)) {
+      throw new ConvexError({ code: "BAD_REQUEST", message: "Provide your payment reference or phone number so the seller can match your payment" });
     }
 
     const orderIds: string[] = [];
@@ -85,7 +96,15 @@ export const placeOrder = mutation({
       total += totalAmount;
 
       const mode = effectiveMode(product);
-      const itemOnline = isOnlineCheckout && (mode === "momo" || mode === "partial");
+      const itemOnline = isManualReceiptPayment && (mode === "momo" || mode === "partial");
+      const seller: any = await ctx.db.get(product.sellerId);
+      const sellerPaymentModes = seller?.paymentReceiptModes ?? {};
+      const acceptedModes = product.paymentOptions?.acceptedModes ?? [mode === "momo" || mode === "partial" ? "momo" : mode];
+      const sellerPaymentInstructions = {
+        acceptedModes,
+        momo: acceptedModes.includes("momo") && sellerPaymentModes.momo?.enabled ? sellerPaymentModes.momo : undefined,
+        bank: acceptedModes.includes("bank_transfer") && sellerPaymentModes.bank?.enabled ? sellerPaymentModes.bank : undefined,
+      };
 
       // Deposit / balance split for partial products.
       let depositAmount: number | undefined;
@@ -116,6 +135,7 @@ export const placeOrder = mutation({
         paymentAccount: itemOnline ? args.paymentAccount : undefined,
         paymentReference: itemOnline ? paymentReference : undefined,
         paymentStatus: itemOnline ? "initiated" : "not_required",
+        sellerPaymentInstructions: itemOnline ? sellerPaymentInstructions : undefined,
         receiptEmail: args.receiptEmail ?? (user as any).email,
         depositAmount,
         balanceAmount,
@@ -152,17 +172,7 @@ export const placeOrder = mutation({
     // Clear cart
     await Promise.all(cartItems.map((item) => ctx.db.delete(item._id)));
 
-    if (isOnlineCheckout && paymentReference) {
-      await ctx.scheduler.runAfter(0, (internal as any).payments.initiateHubtelCharge, {
-        paymentReference,
-        amount: amountDueNow > 0 ? amountDueNow : total,
-        email: args.receiptEmail ?? (user as any).email ?? "customer@aurriq.com",
-        phone: args.paymentAccount || args.buyerPhone,
-        network: args.paymentNetwork,
-      });
-    }
-
-    return { orderIds, total, paymentReference, paymentPending: isOnlineCheckout, amountDueNow };
+    return { orderIds, total, paymentReference, paymentPending: isManualReceiptPayment, amountDueNow };
   },
 });
 
@@ -263,6 +273,72 @@ export const updateOrderStatus = mutation({
       title: `Order ${args.status}`,
       body: `${product?.name ?? "Your order"} is now ${args.status}.`,
       link: "/orders",
+    });
+  },
+});
+
+export const markPaymentReceived = mutation({
+  args: { orderId: v.id("orders") },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not logged in" });
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+    if (!user) throw new ConvexError({ code: "NOT_FOUND", message: "User not found" });
+
+    const order = await ctx.db.get(args.orderId);
+    if (!order) throw new ConvexError({ code: "NOT_FOUND", message: "Order not found" });
+    if (order.sellerId !== user._id) throw new ConvexError({ code: "FORBIDDEN", message: "Not your order" });
+    if (order.paymentStatus === "paid") throw new ConvexError({ code: "BAD_REQUEST", message: "Payment already recorded" });
+
+    const product = await ctx.db.get(order.productId);
+    if (!product) throw new ConvexError({ code: "NOT_FOUND", message: "Product not found" });
+    const quantity = order.quantity ?? 1;
+    if (product.stockQuantity < quantity) {
+      throw new ConvexError({ code: "BAD_REQUEST", message: "Not enough stock remains to confirm this order" });
+    }
+
+    const revenue = order.totalAmount ?? ((order.priceAtPurchase ?? 0) * quantity);
+    await ctx.db.patch(order.productId, {
+      stockQuantity: product.stockQuantity - quantity,
+      totalSold: (product.totalSold ?? 0) + quantity,
+      totalRevenue: (product.totalRevenue ?? 0) + revenue,
+    });
+
+    await ctx.db.patch(args.orderId, {
+      status: "confirmed",
+      paymentStatus: "paid",
+      depositPaid: order.depositAmount != null ? true : order.depositPaid,
+      balancePaid: order.balanceAmount != null ? true : order.balancePaid,
+    });
+
+    await ctx.scheduler.runAfter(0, internal.inventory.checkAndSendAlerts, {
+      productId: order.productId,
+    });
+    await ctx.runMutation(internal.analytics.recordEvent, {
+      subjectType: "product",
+      subjectId: String(order.productId),
+      kind: "purchase",
+      productId: order.productId,
+      sellerId: order.sellerId,
+    });
+    await ctx.scheduler.runAfter(0, (internal as any).receipts.sendOrderReceipt, {
+      orderId: args.orderId,
+    });
+    await ctx.runMutation(internal.notifications.createNotification, {
+      userId: order.buyerId,
+      type: "payment",
+      title: "Payment received",
+      body: `${product.name ?? "Your item"} payment has been received. Your item is being prepared for delivery or pickup.`,
+      link: "/orders",
+    });
+    await ctx.runMutation(internal.notifications.logActivity, {
+      userId: user._id,
+      action: `Payment received for ${product.name ?? "order"} — GHS ${revenue.toFixed(2)}`,
+      meta: { orderId: args.orderId, productId: order.productId, total: revenue },
     });
   },
 });

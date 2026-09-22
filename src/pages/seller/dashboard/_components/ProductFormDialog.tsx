@@ -51,6 +51,7 @@ const schema = z
     stockQuantity: z.coerce.number().int().min(0, "Stock cannot be negative"),
     lowStockThreshold: z.coerce.number().int().min(1, "Set a minimum low-stock alert number"),
     paymentMode: z.enum(["momo", "cod", "negotiable", "partial"]).default("momo"),
+    acceptedPaymentModes: z.array(z.string()).default(["momo"]),
     depositPercent: z.coerce.number().int().min(1).max(100).optional(),
     tags: z.string().optional(),
   })
@@ -108,6 +109,7 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           stockQuantity: editProduct.stockQuantity,
           lowStockThreshold: editProduct.lowStockThreshold,
           paymentMode: ((editProduct as any).paymentOptions?.mode ?? "momo") as FormValues["paymentMode"],
+          acceptedPaymentModes: (editProduct as any).paymentOptions?.acceptedModes ?? [((editProduct as any).paymentOptions?.mode ?? "momo")],
           depositPercent: (editProduct as any).paymentOptions?.percent ?? 50,
           offerWholesale: (editProduct as any).wholesalePrice != null,
           wholesalePrice: (editProduct as any).wholesalePrice,
@@ -118,6 +120,7 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           stockQuantity: 0,
           lowStockThreshold: 5,
           paymentMode: "momo",
+          acceptedPaymentModes: ["momo"],
           depositPercent: 50,
           offerWholesale: false,
           wholesaleMinQty: 5,
@@ -126,6 +129,7 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
 
   const category = watch("category");
   const paymentMode = watch("paymentMode");
+  const acceptedPaymentModes = watch("acceptedPaymentModes") ?? [];
   const offerWholesale = watch("offerWholesale");
 
   // Media uploads: track selected images/videos (existing URL or Convex storage id) in state.
@@ -214,6 +218,7 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
       const paymentOptions = {
         mode: data.paymentMode,
         percent: data.paymentMode === "partial" ? data.depositPercent : undefined,
+        acceptedModes: data.acceptedPaymentModes.length > 0 ? data.acceptedPaymentModes : [data.paymentMode],
       };
 
       const wholesalePrice = data.offerWholesale ? data.wholesalePrice : undefined;
@@ -428,9 +433,43 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
             )}
             {paymentMode === "momo" && (
               <p className="text-[11px] text-muted-foreground flex items-center gap-1">
-                <Info className="size-3" /> Electronic payments are processed only through Aurriq's secure checkout.
+                <Info className="size-3" /> Buyers will see the receipt details you choose below and the order will wait for your payment confirmation.
               </p>
             )}
+            <div className="space-y-2 pt-2">
+              <Label>Receipt options shown to buyers</Label>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {[
+                  { value: "momo", label: "Mobile Money" },
+                  { value: "bank_transfer", label: "Bank Transfer" },
+                  { value: "cash_on_delivery", label: "Pay on Delivery" },
+                  { value: "pay_on_pickup", label: "Pay on Pickup" },
+                ].map((mode) => {
+                  const checked = acceptedPaymentModes.includes(mode.value);
+                  return (
+                    <button
+                      key={mode.value}
+                      type="button"
+                      onClick={() => {
+                        const next = checked
+                          ? acceptedPaymentModes.filter((value) => value !== mode.value)
+                          : [...acceptedPaymentModes, mode.value];
+                        setValue("acceptedPaymentModes", next.length ? next : [mode.value], { shouldValidate: true });
+                      }}
+                      className={cn(
+                        "rounded-lg border px-3 py-2 text-left text-sm transition-colors",
+                        checked ? "border-primary bg-primary/5" : "border-border hover:border-primary/40"
+                      )}
+                    >
+                      <span className="font-medium">{checked ? "Selected: " : ""}{mode.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                Choose the payment methods you want displayed when buyers check out this product.
+              </p>
+            </div>
           </div>
 
           {/* Stock */}

@@ -90,6 +90,60 @@ http.route({
 	}),
 });
 
+http.route({
+	path: "/superadmin/activate-marketplace-subscription",
+	method: "POST",
+	handler: httpAction(async (ctx, request) => {
+		const secret = request.headers.get("authorization")?.replace("Bearer ", "") ?? request.headers.get("x-activation-secret") ?? "";
+		const expected = process.env.DOABOOKPRO_MARKETPLACE_SECRET;
+		if (!expected || secret !== expected) {
+			return new Response("unauthorized", { status: 401 });
+		}
+
+		const body = await request.json().catch(() => ({}));
+		const paymentReference = body?.paymentReference ?? body?.reference;
+		if (!paymentReference) return new Response("missing paymentReference", { status: 400 });
+
+		await ctx.runMutation((api.payments as any).activateMarketplaceSubscriptionFromSuperadmin, {
+			paymentReference: String(paymentReference),
+			activationSecret: secret,
+			transactionId: body?.transactionId ? String(body.transactionId) : undefined,
+		});
+
+		return new Response(JSON.stringify({ activated: true }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
+	}),
+});
+
+http.route({
+	path: "/superadmin/reject-marketplace-subscription",
+	method: "POST",
+	handler: httpAction(async (ctx, request) => {
+		const secret = request.headers.get("authorization")?.replace("Bearer ", "") ?? request.headers.get("x-activation-secret") ?? "";
+		const expected = process.env.DOABOOKPRO_MARKETPLACE_SECRET;
+		if (!expected || secret !== expected) {
+			return new Response("unauthorized", { status: 401 });
+		}
+
+		const body = await request.json().catch(() => ({}));
+		const paymentReference = body?.paymentReference ?? body?.reference;
+		if (!paymentReference) return new Response("missing paymentReference", { status: 400 });
+
+		await ctx.runMutation((api.payments as any).rejectMarketplaceSubscriptionFromSuperadmin, {
+			paymentReference: String(paymentReference),
+			activationSecret: secret,
+			transactionId: body?.transactionId ? String(body.transactionId) : undefined,
+		});
+
+		return new Response(JSON.stringify({ rejected: true }), {
+			status: 200,
+			headers: { "Content-Type": "application/json" },
+		});
+	}),
+});
+
 const CORS_HEADERS = {
 	"Access-Control-Allow-Origin": "*",
 	"Access-Control-Allow-Methods": "GET, OPTIONS",

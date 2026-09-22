@@ -517,6 +517,7 @@ export const updateProfile = mutation({
     paymentMethod: v.optional(v.string()),
     paymentNetwork: v.optional(v.string()),
     paymentAccount: v.optional(v.string()),
+    paymentReceiptModes: v.optional(v.any()),
     businessType: v.optional(v.string()),
     serviceTypes: v.optional(v.array(v.string())),
     customServiceDescription: v.optional(v.string()),
@@ -561,6 +562,7 @@ export const updateProfile = mutation({
         paymentMethod: args.paymentMethod,
         paymentNetwork: args.paymentNetwork,
         paymentAccount: args.paymentAccount,
+        paymentReceiptModes: args.paymentReceiptModes,
         authSubject,
       });
       user = await ctx.db.get(userId);
@@ -575,6 +577,7 @@ export const updateProfile = mutation({
     if (typeof args.paymentMethod === "string") patch.paymentMethod = args.paymentMethod;
     if (typeof args.paymentNetwork === "string") patch.paymentNetwork = args.paymentNetwork;
     if (typeof args.paymentAccount === "string") patch.paymentAccount = args.paymentAccount;
+    if (args.paymentReceiptModes !== undefined) patch.paymentReceiptModes = args.paymentReceiptModes;
     if (typeof args.businessType === "string") patch.businessType = args.businessType;
     if (Array.isArray(args.serviceTypes)) patch.serviceTypes = args.serviceTypes.map((service) => service.trim()).filter(Boolean);
     if (typeof args.customServiceDescription === "string") patch.customServiceDescription = args.customServiceDescription.trim();
@@ -605,6 +608,41 @@ export const updateProfile = mutation({
     }
 
     return true;
+  },
+});
+
+export const syncMarketplaceSellerProfile = action({
+  args: {},
+  handler: async (ctx) => {
+    const user: any = await ctx.runQuery(api.users.current, {});
+    if (!user?.marketplacePaymentReference) return { skipped: true };
+
+    const requestUrl = process.env.DOABOOKPRO_MARKETPLACE_REQUEST_URL;
+    const secret = process.env.DOABOOKPRO_MARKETPLACE_SECRET;
+    if (!requestUrl || !secret) return { skipped: true };
+
+    const syncUrl = requestUrl.replace(/\/marketplace-activation-request\/?$/, "/marketplace-seller-profile-sync");
+    const response = await fetch(syncUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${secret}`,
+      },
+      body: JSON.stringify({
+        sellerId: String(user._id),
+        reference: user.marketplacePaymentReference,
+        sellerName: user.name,
+        storeName: user.name,
+        sellerEmail: user.email,
+        sellerPhone: user.phone,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("DOABookPro seller profile sync failed");
+    }
+
+    return { synced: true };
   },
 });
 

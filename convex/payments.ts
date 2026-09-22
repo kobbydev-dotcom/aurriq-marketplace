@@ -23,6 +23,21 @@ export const MARKETPLACE_VENDOR_PLANS = {
   annual: { label: "Annual", months: 12, direct: 1590, partner: 1399 },
 } as const;
 
+export const AURRIQ_ACTIVATION_PAYMENT = {
+  momo: {
+    label: "Mobile Money",
+    number: "0241678898",
+    name: "David Agyemang",
+  },
+  bank: {
+    label: "Bank Transfer",
+    accountName: "David Osei Agyemang",
+    accountNumber: "1731010003612",
+    bankName: "GCB Bank PLC",
+    branch: "Labone",
+  },
+};
+
 type MarketplacePlanKey = keyof typeof MARKETPLACE_VENDOR_PLANS;
 
 function marketplacePlan(key: string, source: string) {
@@ -47,6 +62,12 @@ export const startMarketplaceSubscription = action({
     const plan = marketplacePlan(args.planKey, source);
     if (!plan) throw new Error("Invalid marketplace subscription plan");
 
+    const superadminUrl = process.env.DOABOOKPRO_MARKETPLACE_REQUEST_URL;
+    const superadminSecret = process.env.DOABOOKPRO_MARKETPLACE_SECRET;
+    if (!superadminUrl || !superadminSecret) {
+      throw new Error("Marketplace activation is not fully configured yet. Please contact support before making payment.");
+    }
+
     const reference = `AURRIQ-VENDOR-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
     await ctx.runMutation(internal.payments.createMarketplaceSubscription, {
       userId: user._id,
@@ -56,17 +77,40 @@ export const startMarketplaceSubscription = action({
       paymentReference: reference,
     });
 
-    const clientId = process.env.HUBTEL_CLIENT_ID;
-    const clientSecret = process.env.HUBTEL_CLIENT_SECRET;
-    if (!clientId || !clientSecret) {
-      await ctx.runMutation(internal.payments.failMarketplaceSubscription, {
-        userId: user._id,
-        paymentReference: reference,
-      });
-      throw new Error("Hubtel payment configuration is not set yet");
+    const response = await fetch(superadminUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${superadminSecret}`,
+      },
+      body: JSON.stringify({
+        reference,
+        sellerId: String(user._id),
+        sellerName: user.name ?? user.email ?? "Aurriq seller",
+        sellerEmail: user.email,
+        sellerPhone: user.phone,
+        storeName: user.name,
+        planKey: args.planKey,
+        planLabel: plan.label,
+        amount: plan.amount,
+        months: plan.months,
+        source,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Your activation request was saved on Aurriq, but DOABookPro could not be notified yet. Please contact support with your payment reference.");
     }
 
-    throw new Error("Hubtel checkout is not enabled yet. Complete the Hubtel collection setup before enabling marketplace payments.");
+    return {
+      reference,
+      planLabel: plan.label,
+      amount: plan.amount,
+      months: plan.months,
+      payment: AURRIQ_ACTIVATION_PAYMENT,
+      referenceNote: "Use your name or store name as the payment reference.",
+      status: "payment_pending",
+    };
   },
 });
 
@@ -83,6 +127,7 @@ export const createMarketplaceSubscription = internalMutation({
       marketplaceSubscriptionStatus: "payment_pending",
       marketplacePlan: args.planKey,
       marketplaceSubscriptionSource: args.source,
+      marketplaceSubscriptionAmount: args.amount,
       marketplacePaymentReference: args.paymentReference,
     });
   },
@@ -113,6 +158,32 @@ export const applyMarketplaceSubscription = internalMutation({
     }
     if (args.status === "failed") {
       await ctx.db.patch(user._id, { marketplaceSubscriptionStatus: "payment_failed" });
+      if (user.phone) {
+        await ctx.scheduler.runAfter(0, internal.sms.sendSMS, {
+          to: user.phone,
+          message: "Aurriq update: your seller account activation could not be approved after payment review. Please contact Aurriq support with your payment reference for assistance.",
+        });
+      }
+      if (user.email) {
+        await ctx.scheduler.runAfter(0, internal.mail.sendEmail, {
+          to: user.email,
+          subject: "Aurriq seller account activation update",
+          heading: "Seller account activation update",
+          bodyLines: [
+            "Your Aurriq seller account activation could not be approved after payment review.",
+            "Please contact Aurriq support with your payment reference so this can be reviewed.",
+          ],
+          ctaText: "Open Aurriq",
+          ctaUrl: `${process.env.AURRIQ_PUBLIC_URL ?? "https://aurriq.doabookpro.com"}/profile`,
+        });
+      }
+      await ctx.runMutation(internal.notifications.createNotification, {
+        userId: user._id,
+        type: "payment",
+        title: "Seller activation not approved",
+        body: "Your seller account activation could not be approved after payment review. Please contact Aurriq support with your payment reference.",
+        link: "/profile",
+      });
       return;
     }
 
@@ -131,6 +202,73 @@ export const applyMarketplaceSubscription = internalMutation({
       marketplaceSubscriptionStatus: "active",
       marketplacePaidUntil: paidUntil,
     });
+
+    if (user.phone) {
+      await ctx.scheduler.runAfter(0, internal.sms.sendSMS, {
+        to: user.phone,
+        message: "Congratulations from Aurriq! Your storefront is ready. Welcome to the Aurriq family. We are excited to see your shop grow and wish you many successful sales.",
+      });
+    }
+    if (user.email) {
+      await ctx.scheduler.runAfter(0, internal.mail.sendEmail, {
+        to: user.email,
+        subject: "Your Aurriq storefront is ready",
+        heading: "Congratulations, your seller account is active",
+        bodyLines: [
+          "Welcome to the Aurriq family. Your storefront and seller dashboard are now ready.",
+          "We are excited to see your shop grow and wish you many successful sales.",
+        ],
+        ctaText: "Open seller dashboard",
+        ctaUrl: `${process.env.AURRIQ_PUBLIC_URL ?? "https://aurriq.doabookpro.com"}/seller/dashboard`,
+      });
+    }
+    await ctx.runMutation(internal.notifications.createNotification, {
+      userId: user._id,
+      type: "payment",
+      title: "Your Aurriq storefront is ready",
+      body: "Congratulations and welcome to the Aurriq family. Your seller dashboard is now active.",
+      link: "/seller/dashboard",
+    });
+  },
+});
+
+export const activateMarketplaceSubscriptionFromSuperadmin = mutation({
+  args: {
+    paymentReference: v.string(),
+    activationSecret: v.string(),
+    transactionId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const expected = process.env.DOABOOKPRO_MARKETPLACE_SECRET;
+    if (!expected || args.activationSecret !== expected) {
+      throw new Error("Unauthorized activation request");
+    }
+    await ctx.runMutation(internal.payments.applyMarketplaceSubscription, {
+      paymentReference: args.paymentReference,
+      status: "success",
+      transactionId: args.transactionId,
+    });
+    return { activated: true };
+  },
+});
+
+export const rejectMarketplaceSubscriptionFromSuperadmin = mutation({
+  args: {
+    paymentReference: v.string(),
+    activationSecret: v.string(),
+    transactionId: v.optional(v.string()),
+  },
+  handler: async (ctx, args) => {
+    const expected = process.env.DOABOOKPRO_MARKETPLACE_SECRET;
+    if (!expected || args.activationSecret !== expected) {
+      throw new Error("Unauthorized rejection request");
+    }
+    await ctx.runMutation(internal.payments.applyMarketplaceSubscription, {
+      paymentReference: args.paymentReference,
+      status: "failed",
+      transactionId: args.transactionId,
+    });
+    return { rejected: true };
   },
 });
 

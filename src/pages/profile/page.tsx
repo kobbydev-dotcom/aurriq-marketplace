@@ -48,6 +48,8 @@ export default function ProfilePage() {
   const scheduleDeletion = useMutation((api as any).accountDeletion.scheduleDeletion);
   const reactivateAccount = useMutation((api as any).accountDeletion.reactivateAccount);
   const purgeImmediately = useMutation((api as any).accountDeletion.purgeImmediately);
+  const deleteVendorAccountOnly = useMutation((api as any).accountDeletion.deleteVendorAccountOnly);
+  const syncMarketplaceSellerProfile = useAction((api as any).users.syncMarketplaceSellerProfile);
   const sendPasswordResetNotice = useAction((api as any).users.sendPasswordResetNotice);
   const generateAvatarUploadUrl = useMutation(api.users.generateAvatarUploadUrl);
   const avatarUrl = useQuery(
@@ -82,7 +84,8 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [deletionOpen, setDeletionOpen] = useState(false);
-  const [deletionStep, setDeletionStep] = useState<"warning" | "confirm">("warning");
+  const [deletionStep, setDeletionStep] = useState<"scope" | "warning" | "confirm">("warning");
+  const [deletionScope, setDeletionScope] = useState<"vendor" | "all">("all");
   const [deletionMode, setDeletionMode] = useState<"scheduled" | "immediate">("scheduled");
   const [deletionPasswords, setDeletionPasswords] = useState(["", "", ""]);
   const [deleting, setDeleting] = useState(false);
@@ -176,6 +179,13 @@ export default function ProfilePage() {
         locationShared,
         doabookproSlug: doabookproSlug.trim() || undefined,
       });
+      if ((user as any)?.marketplacePaymentReference) {
+        try {
+          await syncMarketplaceSellerProfile();
+        } catch (error) {
+          console.error("Marketplace seller sync failed", error);
+        }
+      }
       sessionStorage.setItem("aurriq_profile_saved", "true");
       window.location.replace(window.location.href);
     } catch (error) {
@@ -257,6 +267,10 @@ export default function ProfilePage() {
 
   const displayImage = avatarUrl ?? user?.image;
   const activeFollowList = followDialog === "followers" ? followers : following;
+  const hasActivatedVendorAccount = Boolean(
+    (user as any)?.marketplaceSubscriptionStatus === "active"
+    || ((user as any)?.isSeller && (user as any)?.role === "seller")
+  );
 
   const openPerson = (personId: string) => {
     setFollowDialog(null);
@@ -279,11 +293,32 @@ export default function ProfilePage() {
     if (deleting) return;
     setDeletionOpen(false);
     setDeletionStep("warning");
+    setDeletionScope("all");
     setDeletionMode("scheduled");
     setDeletionPasswords(["", "", ""]);
   };
 
+  const openDeletion = () => {
+    setDeletionScope(hasActivatedVendorAccount ? "vendor" : "all");
+    setDeletionStep(hasActivatedVendorAccount ? "scope" : "warning");
+    setDeletionOpen(true);
+  };
+
   const confirmDeletion = async () => {
+    if (deletionScope === "vendor") {
+      setDeleting(true);
+      try {
+        await deleteVendorAccountOnly();
+        closeDeletion();
+        toast.success("Your vendor account has been deleted. Your buyer account remains active.");
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Vendor account deletion failed.");
+      } finally {
+        setDeleting(false);
+      }
+      return;
+    }
+
     const requiresPassword = hasPasswordAccount !== false;
     const password = deletionPasswords[0].trim();
     if (requiresPassword && (!password || (deletionMode === "immediate" && deletionPasswords.some((value) => value !== password)))) {
@@ -353,7 +388,7 @@ export default function ProfilePage() {
               <CardTitle className="text-lg">Profile Picture</CardTitle>
               <CardDescription>Upload a photo buyers and sellers will see.</CardDescription>
             </CardHeader>
-            <CardContent className="flex items-center gap-6">
+            <CardContent className="flex flex-col items-start gap-4 sm:flex-row sm:items-center sm:gap-6">
               <button
                 type="button"
                 onClick={() => avatarInputRef.current?.click()}
@@ -382,14 +417,14 @@ export default function ProfilePage() {
                 onChange={(e) => handleAvatarFile(e.target.files?.[0] ?? null)}
               />
 
-              <div className="flex flex-col gap-1">
+              <div className="min-w-0 flex-1 flex flex-col gap-1">
                 <p className="text-xl font-bold">{user?.name || fullName || "Add your name"}</p>
                 <p className="text-sm text-muted-foreground">
                   {(user as any)?.businessType
                     ? BUSINESS_TYPES.find((b) => b.value === (user as any).businessType)?.label
                     : "Aurriq Member"}
                 </p>
-                <div className="mt-2 flex items-center gap-2">
+                <div className="mt-2 flex flex-wrap items-center gap-2">
                   <button
                     type="button"
                     onClick={() => setFollowDialog("followers")}
@@ -407,8 +442,8 @@ export default function ProfilePage() {
                 </div>
               </div>
 
-              <div className="ml-auto">
-                <Button variant="outline" onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar}>
+              <div className="w-full sm:ml-auto sm:w-auto">
+                <Button className="w-full sm:w-auto" variant="outline" onClick={() => avatarInputRef.current?.click()} disabled={uploadingAvatar}>
                   {uploadingAvatar ? <Loader2 className="mr-2 size-4 animate-spin" /> : <Camera className="mr-2 size-4" />}
                   {uploadingAvatar ? "Uploading..." : "Change Photo"}
                 </Button>
@@ -641,7 +676,7 @@ export default function ProfilePage() {
               <CardDescription>This removes your profile, products, clients, messages, sales records, and marketplace activity.</CardDescription>
             </CardHeader>
             <CardContent>
-              <Button variant="destructive" onClick={() => setDeletionOpen(true)} disabled={(user as any)?.isPendingDeletion}>Delete account permanently</Button>
+              <Button variant="destructive" onClick={openDeletion} disabled={(user as any)?.isPendingDeletion}>Delete account permanently</Button>
             </CardContent>
           </Card>
         </div>
@@ -710,10 +745,22 @@ export default function ProfilePage() {
         <Dialog open={deletionOpen} onOpenChange={(open) => open ? setDeletionOpen(true) : closeDeletion()}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
-              <DialogTitle>{deletionStep === "warning" ? "Are you sure you want to delete your account?" : "Confirm permanent deletion"}</DialogTitle>
+              <DialogTitle>
+                {deletionStep === "scope"
+                  ? "What do you want to delete?"
+                  : deletionStep === "warning"
+                    ? "Are you sure you want to delete your account?"
+                    : deletionScope === "vendor"
+                      ? "Confirm vendor account deletion"
+                      : "Confirm permanent deletion"}
+              </DialogTitle>
               <DialogDescription>
-                {deletionStep === "warning"
+                {deletionStep === "scope"
+                  ? "Your seller account is active. Choose whether to remove only your vendor account or delete your full Aurriq account."
+                  : deletionStep === "warning"
                   ? "You will lose everything you have built on Aurriq, including products, clients, pending sales, messages, and account records."
+                  : deletionScope === "vendor"
+                    ? "Your products will be taken offline and your buyer account will remain active."
                   : deletionMode === "immediate"
                     ? hasPasswordAccount === false
                       ? "Immediate deletion cannot be undone. Confirm below to erase your Google-linked account now."
@@ -724,26 +771,48 @@ export default function ProfilePage() {
               </DialogDescription>
             </DialogHeader>
 
-            {deletionStep === "warning" ? (
+            {deletionStep === "scope" ? (
+              <div className="space-y-3 text-sm">
+                <label className="flex items-start gap-3 rounded-lg border border-border p-3">
+                  <input type="radio" className="mt-1" checked={deletionScope === "vendor"} onChange={() => setDeletionScope("vendor")} />
+                  <span>
+                    <span className="block font-medium">Vendor account only</span>
+                    <span className="block text-muted-foreground">Remove seller access and take your products offline. Keep your buyer profile, login, messages, and purchases.</span>
+                  </span>
+                </label>
+                <label className="flex items-start gap-3 rounded-lg border border-border p-3">
+                  <input type="radio" className="mt-1" checked={deletionScope === "all"} onChange={() => setDeletionScope("all")} />
+                  <span>
+                    <span className="block font-medium">Full Aurriq account</span>
+                    <span className="block text-muted-foreground">Delete your profile, seller records, buyer account, products, messages, and marketplace activity.</span>
+                  </span>
+                </label>
+                <DialogFooter><Button variant="outline" onClick={closeDeletion}>Cancel</Button><Button variant="destructive" onClick={() => setDeletionStep(deletionScope === "vendor" ? "confirm" : "warning")}>Continue</Button></DialogFooter>
+              </div>
+            ) : deletionStep === "warning" ? (
               <div className="space-y-3 text-sm">
                 <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-amber-700 dark:text-amber-300">Pending sales and marketplace records will not remain after deletion. This action is permanent after the seven-day recovery window.</div>
                 <label className="flex items-center gap-2"><input type="radio" checked={deletionMode === "scheduled"} onChange={() => setDeletionMode("scheduled")} /> Delete after 7 days so I can reactivate</label>
                 <label className="flex items-center gap-2"><input type="radio" checked={deletionMode === "immediate"} onChange={() => setDeletionMode("immediate")} /> Delete everything immediately</label>
-                <DialogFooter><Button variant="outline" onClick={closeDeletion}>Cancel</Button><Button variant="destructive" onClick={() => setDeletionStep("confirm")}>Yes, continue</Button></DialogFooter>
+                <DialogFooter><Button variant="outline" onClick={hasActivatedVendorAccount ? () => setDeletionStep("scope") : closeDeletion}>Cancel</Button><Button variant="destructive" onClick={() => setDeletionStep("confirm")}>Yes, continue</Button></DialogFooter>
               </div>
             ) : (
               <div className="space-y-3">
-                {hasPasswordAccount !== false && deletionPasswords.map((value, index) => (
+                {deletionScope === "vendor" ? (
+                  <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-muted-foreground">
+                    This removes seller access and takes your products offline. Your normal Aurriq buyer account stays active.
+                  </div>
+                ) : hasPasswordAccount !== false && deletionPasswords.map((value, index) => (
                   <Input key={index} type="password" placeholder={deletionMode === "immediate" ? `Password confirmation ${index + 1}` : "Your password"} value={deletionMode === "scheduled" && index > 0 ? "" : value} disabled={deletionMode === "scheduled" && index > 0} onChange={(event) => setDeletionPasswords((current) => current.map((item, itemIndex) => itemIndex === index ? event.target.value : item))} />
                 ))}
-                {hasPasswordAccount === false ? (
+                {deletionScope !== "vendor" && hasPasswordAccount === false ? (
                   <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-3 text-sm text-muted-foreground">
                     This Google-linked account has no Aurriq password. Your confirmation here is final and cannot be recovered after deletion.
                   </div>
-                ) : (
+                ) : deletionScope !== "vendor" ? (
                   <p className="text-xs text-muted-foreground">Your password is verified through Aurriq sign-in and is never stored by this deletion form.</p>
-                )}
-                <DialogFooter><Button variant="outline" onClick={() => setDeletionStep("warning")} disabled={deleting}>Back</Button><Button variant="destructive" onClick={confirmDeletion} disabled={deleting}>{deleting ? "Verifying..." : deletionMode === "immediate" ? "Erase everything now" : "Schedule deletion"}</Button></DialogFooter>
+                ) : null}
+                <DialogFooter><Button variant="outline" onClick={() => setDeletionStep(hasActivatedVendorAccount ? "scope" : "warning")} disabled={deleting}>Back</Button><Button variant="destructive" onClick={confirmDeletion} disabled={deleting}>{deleting ? "Working..." : deletionScope === "vendor" ? "Delete vendor account" : deletionMode === "immediate" ? "Erase everything now" : "Schedule deletion"}</Button></DialogFooter>
               </div>
             )}
           </DialogContent>

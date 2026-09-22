@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from "react";
-import { Link, useSearchParams } from "react-router-dom";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useState } from "react";
+import { Link } from "react-router-dom";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api.js";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import {
   Plus, Package, TrendingUp, AlertTriangle, ShoppingBag,
   MoreVertical, Pencil, Trash2, ToggleLeft, ToggleRight, Tag, MessageSquare, ArrowLeft,
-  Clock, CheckCircle, Truck, PackageCheck, XCircle, Store, CreditCard, Smartphone, ShieldCheck, Loader2, FileText
+  Clock, CheckCircle, Truck, PackageCheck, XCircle, Store, CreditCard, Smartphone, ShieldCheck, Loader2, FileText, Landmark
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
@@ -246,10 +246,12 @@ function SellerOrdersTab({ onContactBuyer }: { onContactBuyer: (buyerId: Id<"use
   const getSellerOrders = ((api.orders as any).getSellerOrders || (api.products as any).listAll) as any;
   const updateOrderStatus = ((api.orders as any).updateOrderStatus || (api.products as any).listAll) as any;
   const markBalanceCollected = ((api.orders as any).markBalanceCollected || (api.products as any).listAll) as any;
+  const markPaymentReceivedEndpoint = ((api.orders as any).markPaymentReceived || (api.products as any).listAll) as any;
 
   const orders = useQuery(getSellerOrders, {});
   const updateStatus = useMutation(updateOrderStatus) as any;
   const collectBalance = useMutation(markBalanceCollected) as any;
+  const markPaymentReceived = useMutation(markPaymentReceivedEndpoint) as any;
   const [updating, setUpdating] = useState<string | null>(null);
   const [collecting, setCollecting] = useState<string | null>(null);
 
@@ -260,6 +262,19 @@ function SellerOrdersTab({ onContactBuyer }: { onContactBuyer: (buyerId: Id<"use
       toast.success("Balance marked as collected — order fully settled");
     } catch (e) {
       const msg = e instanceof ConvexError ? (e.data as { message: string }).message : "Failed to update";
+      toast.error(msg);
+    } finally {
+      setCollecting(null);
+    }
+  };
+
+  const handlePaymentReceived = async (orderId: string) => {
+    setCollecting(orderId);
+    try {
+      await markPaymentReceived({ orderId });
+      toast.success("Payment received — buyer notified and revenue updated");
+    } catch (e) {
+      const msg = e instanceof ConvexError ? (e.data as { message: string }).message : "Failed to confirm payment";
       toast.error(msg);
     } finally {
       setCollecting(null);
@@ -379,6 +394,17 @@ function SellerOrdersTab({ onContactBuyer }: { onContactBuyer: (buyerId: Id<"use
                         </SelectContent>
                       </Select>
                     )}
+                    {order.status === "awaiting_payment" && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-7 gap-1.5 text-xs"
+                        disabled={collecting === order._id}
+                        onClick={() => handlePaymentReceived(order._id)}
+                      >
+                        <CheckCircle className="size-3" /> Payment Received
+                      </Button>
+                    )}
                     <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => onContactBuyer(order.buyerId)}>
                       <MessageSquare className="size-3" /> Contact buyer
                     </Button>
@@ -415,12 +441,20 @@ function PaymentSettingsTab({
     paymentMethod?: string;
     paymentNetwork?: string;
     paymentAccount?: string;
+    paymentReceiptModes?: any;
   }) => Promise<void>;
 }) {
   const [phone, setPhone] = useState(currentUser?.phone ?? "");
-  const [paymentMethod, setPaymentMethod] = useState(currentUser?.paymentMethod ?? "mobile_money");
-  const [paymentNetwork, setPaymentNetwork] = useState(currentUser?.paymentNetwork ?? "mtn");
-  const [paymentAccount, setPaymentAccount] = useState(currentUser?.paymentAccount ?? "");
+  const savedModes = (currentUser as any)?.paymentReceiptModes ?? {};
+  const [acceptMomo, setAcceptMomo] = useState(savedModes.momo?.enabled ?? (currentUser?.paymentMethod ?? "mobile_money") === "mobile_money");
+  const [momoNetwork, setMomoNetwork] = useState(savedModes.momo?.network ?? currentUser?.paymentNetwork ?? "mtn");
+  const [momoName, setMomoName] = useState(savedModes.momo?.name ?? currentUser?.name ?? "");
+  const [momoNumber, setMomoNumber] = useState(savedModes.momo?.number ?? currentUser?.paymentAccount ?? "");
+  const [acceptBank, setAcceptBank] = useState(savedModes.bank?.enabled ?? false);
+  const [bankAccountName, setBankAccountName] = useState(savedModes.bank?.accountName ?? currentUser?.name ?? "");
+  const [bankAccountNumber, setBankAccountNumber] = useState(savedModes.bank?.accountNumber ?? "");
+  const [bankName, setBankName] = useState(savedModes.bank?.bankName ?? "");
+  const [bankBranch, setBankBranch] = useState(savedModes.bank?.branch ?? "");
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
@@ -428,9 +462,24 @@ function PaymentSettingsTab({
     try {
       await onSave({
         phone: phone.trim() || undefined,
-        paymentMethod,
-        paymentNetwork: paymentMethod === "mobile_money" ? paymentNetwork : undefined,
-        paymentAccount: paymentMethod === "mobile_money" ? paymentAccount.trim() || undefined : undefined,
+        paymentMethod: acceptMomo ? "mobile_money" : acceptBank ? "bank_transfer" : "cash_on_delivery",
+        paymentNetwork: acceptMomo ? momoNetwork : undefined,
+        paymentAccount: acceptMomo ? momoNumber.trim() || undefined : undefined,
+        paymentReceiptModes: {
+          momo: {
+            enabled: acceptMomo,
+            network: momoNetwork,
+            name: momoName.trim() || undefined,
+            number: momoNumber.trim() || undefined,
+          },
+          bank: {
+            enabled: acceptBank,
+            accountName: bankAccountName.trim() || undefined,
+            accountNumber: bankAccountNumber.trim() || undefined,
+            bankName: bankName.trim() || undefined,
+            branch: bankBranch.trim() || undefined,
+          },
+        },
       });
       toast.success("Payment settings saved");
     } catch {
@@ -469,25 +518,17 @@ function PaymentSettingsTab({
             <CardTitle className="flex items-center gap-2 text-base"><Smartphone className="size-4" /> MoMo Settings</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">Preferred Payment Method</label>
-              <select
-                value={paymentMethod}
-                onChange={(e) => setPaymentMethod(e.target.value)}
-                className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-              >
-                <option value="mobile_money">Mobile Money</option>
-                <option value="cash_on_delivery">Cash on Delivery</option>
-                <option value="bank_transfer">Bank Transfer</option>
-              </select>
-            </div>
-            {paymentMethod === "mobile_money" && (
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input type="checkbox" checked={acceptMomo} onChange={(e) => setAcceptMomo(e.target.checked)} />
+              Accept Mobile Money receipts
+            </label>
+            {acceptMomo && (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <label className="text-sm font-medium">Network</label>
                   <select
-                    value={paymentNetwork}
-                    onChange={(e) => setPaymentNetwork(e.target.value)}
+                    value={momoNetwork}
+                    onChange={(e) => setMomoNetwork(e.target.value)}
                     className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   >
                     <option value="mtn">MTN MoMo</option>
@@ -496,10 +537,19 @@ function PaymentSettingsTab({
                   </select>
                 </div>
                 <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Account Name</label>
+                  <input
+                    value={momoName}
+                    onChange={(e) => setMomoName(e.target.value)}
+                    placeholder="Name on MoMo account"
+                    className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+                  />
+                </div>
+                <div className="space-y-1.5">
                   <label className="text-sm font-medium">MoMo Number</label>
                   <input
-                    value={paymentAccount}
-                    onChange={(e) => setPaymentAccount(e.target.value)}
+                    value={momoNumber}
+                    onChange={(e) => setMomoNumber(e.target.value)}
                     placeholder="+233 24 000 0000"
                     className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                   />
@@ -508,10 +558,42 @@ function PaymentSettingsTab({
             )}
           </CardContent>
         </Card>
+
+        <Card className="md:col-span-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-base"><Landmark className="size-4" /> Bank Transfer Settings</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input type="checkbox" checked={acceptBank} onChange={(e) => setAcceptBank(e.target.checked)} />
+              Accept bank transfer receipts
+            </label>
+            {acceptBank && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Account Name</label>
+                  <input value={bankAccountName} onChange={(e) => setBankAccountName(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Account Number</label>
+                  <input value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Bank Name</label>
+                  <input value={bankName} onChange={(e) => setBankName(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-medium">Branch</label>
+                  <input value={bankBranch} onChange={(e) => setBankBranch(e.target.value)} className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" />
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <div className="rounded-xl border bg-primary/5 p-4 text-sm text-muted-foreground">
-        Mobile Money details let buyers check out without leaving the marketplace. Keep them updated so orders can be confirmed quickly.
+        These details are shown to buyers only on products where you enable the matching payment option.
       </div>
 
       <Button onClick={save} disabled={saving} className="gap-2">
@@ -543,7 +625,6 @@ export default function SellerDashboardInner() {
   const updateProduct = useMutation(updateProductEndpoint) as any;
   const deleteProduct = useMutation(deleteProductEndpoint) as any;
   const updateProfile = useMutation(updateProfileEndpoint) as any;
-  const recoverMarketplaceSubscription = useAction((api.payments as any).recoverMarketplaceSubscription);
 
   const [formOpen, setFormOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<Doc<"products"> | null>(null);
@@ -551,54 +632,6 @@ export default function SellerDashboardInner() {
   const [activeTab, setActiveTab] = useState("products");
   const [selectedBuyerId, setSelectedBuyerId] = useState<Id<"users"> | null>(null);
   const [subscriptionOpen, setSubscriptionOpen] = useState(false);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [recoveringPayment, setRecoveringPayment] = useState(false);
-  const recoveryAttempted = useRef(false);
-
-  useEffect(() => {
-    if (currentUser?.role === "seller") {
-      setRecoveringPayment(false);
-      localStorage.removeItem("aurriq_pending_vendor_payment");
-      if (searchParams.has("reference") || searchParams.has("subscription")) {
-        searchParams.delete("subscription");
-        searchParams.delete("reference");
-        searchParams.delete("trxref");
-        setSearchParams(searchParams, { replace: true });
-      }
-    }
-  }, [currentUser?.role, searchParams, setSearchParams]);
-
-  useEffect(() => {
-    const reference = searchParams.get("reference")
-      || localStorage.getItem("aurriq_pending_vendor_payment");
-    if (!reference || currentUser === undefined || currentUser?.role === "seller" || recoveryAttempted.current) return;
-
-    recoveryAttempted.current = true;
-    setRecoveringPayment(true);
-    recoverMarketplaceSubscription({ paymentReference: reference })
-      .then((result: any) => {
-        if (!result?.recovered) {
-          localStorage.removeItem("aurriq_pending_vendor_payment");
-          setRecoveringPayment(false);
-          toast.error(result?.message ?? "We could not confirm the payment yet. Please try again shortly.");
-          return;
-        }
-        localStorage.removeItem("aurriq_pending_vendor_payment");
-        toast.success("Payment confirmed. Your vendor dashboard is ready.");
-      })
-      .catch((error) => {
-        recoveryAttempted.current = true;
-        localStorage.removeItem("aurriq_pending_vendor_payment");
-        setRecoveringPayment(false);
-        toast.error("We could not confirm the payment yet. Please try again shortly.");
-      })
-      .finally(() => {
-        searchParams.delete("subscription");
-        searchParams.delete("reference");
-        searchParams.delete("trxref");
-        setSearchParams(searchParams, { replace: true });
-      });
-  }, [currentUser, searchParams, setSearchParams, recoverMarketplaceSubscription]);
 
   const handleEdit = (p: Doc<"products">) => {
     setEditTarget(p);
@@ -639,6 +672,7 @@ export default function SellerDashboardInner() {
     paymentMethod?: string;
     paymentNetwork?: string;
     paymentAccount?: string;
+    paymentReceiptModes?: any;
   }) => {
     await updateProfile({
       ...payload,
@@ -657,20 +691,6 @@ export default function SellerDashboardInner() {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {Array.from({ length: 8 }).map((_, i) => <Skeleton key={i} className="h-56 w-full" />)}
         </div>
-      </div>
-    );
-  }
-
-  if (recoveringPayment) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-4 text-center px-4">
-        <Loader2 className="size-8 text-primary animate-spin" />
-        <h2 className="text-2xl font-light" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
-          Confirming your marketplace payment
-        </h2>
-        <p className="text-sm text-muted-foreground max-w-sm">
-          We’re verifying your successful payment and opening your vendor dashboard. You will not be charged again.
-        </p>
       </div>
     );
   }
