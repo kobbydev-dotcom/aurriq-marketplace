@@ -90,6 +90,17 @@ export const scheduleDeletion = mutation({
         deletionRequestedAt: requestedAt,
         deletionScheduledFor: scheduledFor,
       });
+      await ctx.scheduler.runAfter(0, (internal as any).aurriqHistory.sendHistoryEvent, {
+        eventType: "account_deletion_scheduled",
+        reference: `AURRIQ-DELETE-${user._id}-${requestedAt}`,
+        sellerId: String(user._id),
+        sellerName: user.name,
+        sellerEmail: user.email,
+        sellerPhone: user.phone,
+        storeName: user.name,
+        status: "scheduled",
+        note: "Full Aurriq account deletion scheduled by user.",
+      });
       await ctx.scheduler.runAt(scheduledFor, internal.accountDeletion.purgeScheduledAccount, { userId: user._id });
     }
     return { scheduledFor };
@@ -114,6 +125,19 @@ export const purgeImmediately = mutation({
   args: {},
   handler: async (ctx) => {
     const users = await findCurrentUserGroup(ctx);
+    for (const user of users) {
+      await ctx.scheduler.runAfter(0, (internal as any).aurriqHistory.sendHistoryEvent, {
+        eventType: "account_deleted",
+        reference: `AURRIQ-DELETE-NOW-${user._id}-${Date.now()}`,
+        sellerId: String(user._id),
+        sellerName: user.name,
+        sellerEmail: user.email,
+        sellerPhone: user.phone,
+        storeName: user.name,
+        status: "deleted",
+        note: "Full Aurriq account deleted immediately by user.",
+      });
+    }
     await purgeUsers(ctx, users.map((user) => user._id));
   },
 });
@@ -147,6 +171,17 @@ export const deleteVendorAccountOnly = mutation({
         action: "vendor_account_deleted",
         meta: { message: "Vendor account deleted while keeping buyer account active.", at: Date.now() },
       } as any);
+      await ctx.scheduler.runAfter(0, (internal as any).aurriqHistory.sendHistoryEvent, {
+        eventType: "vendor_account_deleted",
+        reference: `AURRIQ-VENDOR-DELETE-${user._id}-${Date.now()}`,
+        sellerId: String(user._id),
+        sellerName: user.name,
+        sellerEmail: user.email,
+        sellerPhone: user.phone,
+        storeName: user.name,
+        status: "vendor_deleted",
+        note: "Vendor account deleted only. Buyer account remains active.",
+      });
     }
 
     return { deletedVendorAccount: true };

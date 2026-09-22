@@ -1,4 +1,4 @@
-import { action, internalAction, internalMutation, mutation } from "./_generated/server";
+import { action, internalAction, internalMutation, mutation, query } from "./_generated/server";
 import { api, internal } from "./_generated/api";
 import { v } from "convex/values";
 
@@ -38,12 +38,20 @@ export const AURRIQ_ACTIVATION_PAYMENT = {
   },
 };
 
+const DAY_MS = 24 * 60 * 60 * 1000;
+const AURRIQ_SUPPORT_PHONE = "+233 27 442 1221";
+const AURRIQ_SUPPORT_EMAIL = "devagyemang@gmail.com";
+
 type MarketplacePlanKey = keyof typeof MARKETPLACE_VENDOR_PLANS;
 
 function marketplacePlan(key: string, source: string) {
   const plan = MARKETPLACE_VENDOR_PLANS[key as MarketplacePlanKey];
   if (!plan) return null;
   return { ...plan, amount: source === "doabookpro" ? plan.partner : plan.direct };
+}
+
+function supportLine() {
+  return `Contact Aurriq Team on ${AURRIQ_SUPPORT_PHONE} or ${AURRIQ_SUPPORT_EMAIL}.`;
 }
 
 // Public action: start the separate Aurriq marketplace vendor subscription.
@@ -68,7 +76,9 @@ export const startMarketplaceSubscription = action({
       throw new Error("Marketplace activation is not fully configured yet. Please contact support before making payment.");
     }
 
-    const reference = `AURRIQ-VENDOR-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
+    const isTopUp = user.marketplaceSubscriptionStatus === "active" && typeof user.marketplacePaidUntil === "number" && user.marketplacePaidUntil > Date.now();
+    const referencePrefix = isTopUp ? "AURRIQ-TOPUP" : "AURRIQ-VENDOR";
+    const reference = `${referencePrefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`;
     await ctx.runMutation(internal.payments.createMarketplaceSubscription, {
       userId: user._id,
       planKey: args.planKey,
@@ -95,6 +105,7 @@ export const startMarketplaceSubscription = action({
         amount: plan.amount,
         months: plan.months,
         source,
+        requestType: isTopUp ? "top_up" : "activation",
       }),
     });
 
@@ -108,8 +119,9 @@ export const startMarketplaceSubscription = action({
       amount: plan.amount,
       months: plan.months,
       payment: AURRIQ_ACTIVATION_PAYMENT,
-      referenceNote: "Use your name or store name as the payment reference.",
+      referenceNote: isTopUp ? "Use Top Up with your shop or vendor name as the payment reference." : "Use your name or store name as the payment reference.",
       status: "payment_pending",
+      requestType: isTopUp ? "top_up" : "activation",
     };
   },
 });
@@ -161,7 +173,7 @@ export const applyMarketplaceSubscription = internalMutation({
       if (user.phone) {
         await ctx.scheduler.runAfter(0, internal.sms.sendSMS, {
           to: user.phone,
-          message: "Aurriq update: your seller account activation could not be approved after payment review. Please contact Aurriq support with your payment reference for assistance.",
+          message: `Aurriq update: your seller account activation could not be approved after payment review. Please contact Aurriq support with your payment reference for assistance. ${supportLine()}`,
         });
       }
       if (user.email) {
@@ -171,7 +183,7 @@ export const applyMarketplaceSubscription = internalMutation({
           heading: "Seller account activation update",
           bodyLines: [
             "Your Aurriq seller account activation could not be approved after payment review.",
-            "Please contact Aurriq support with your payment reference so this can be reviewed.",
+            `Please contact Aurriq support with your payment reference so this can be reviewed. ${supportLine()}`,
           ],
           ctaText: "Open Aurriq",
           ctaUrl: `${process.env.AURRIQ_PUBLIC_URL ?? "https://aurriq.doabookpro.com"}/profile`,
@@ -201,23 +213,36 @@ export const applyMarketplaceSubscription = internalMutation({
       role: "seller",
       marketplaceSubscriptionStatus: "active",
       marketplacePaidUntil: paidUntil,
+      marketplaceLockedAt: undefined,
+      marketplaceLastWeekSmsSentFor: undefined,
+      marketplaceLastDaySmsSentFor: undefined,
     });
+
+    const wasRenewal = user.marketplaceSubscriptionStatus === "locked" || (typeof user.marketplacePaidUntil === "number" && user.marketplacePaidUntil > Date.now());
+    const smsMessage = wasRenewal
+      ? "Thank you for renewing your Aurriq seller account. Your vendor dashboard has been reinstated, and nothing was lost. You can pick up from where you left off."
+      : "Congratulations from Aurriq! Your storefront is ready. Welcome to the Aurriq family. We are excited to see your shop grow and wish you many successful sales.";
 
     if (user.phone) {
       await ctx.scheduler.runAfter(0, internal.sms.sendSMS, {
         to: user.phone,
-        message: "Congratulations from Aurriq! Your storefront is ready. Welcome to the Aurriq family. We are excited to see your shop grow and wish you many successful sales.",
+        message: smsMessage,
       });
     }
     if (user.email) {
       await ctx.scheduler.runAfter(0, internal.mail.sendEmail, {
         to: user.email,
-        subject: "Your Aurriq storefront is ready",
-        heading: "Congratulations, your seller account is active",
-        bodyLines: [
-          "Welcome to the Aurriq family. Your storefront and seller dashboard are now ready.",
-          "We are excited to see your shop grow and wish you many successful sales.",
-        ],
+        subject: wasRenewal ? "Your Aurriq seller account has been reinstated" : "Your Aurriq storefront is ready",
+        heading: wasRenewal ? "Thank you for your renewal" : "Congratulations, your seller account is active",
+        bodyLines: wasRenewal
+          ? [
+              "Your Aurriq vendor dashboard has been reinstated.",
+              "Nothing was lost, and you can pick up from where you left off.",
+            ]
+          : [
+              "Welcome to the Aurriq family. Your storefront and seller dashboard are now ready.",
+              "We are excited to see your shop grow and wish you many successful sales.",
+            ],
         ctaText: "Open seller dashboard",
         ctaUrl: `${process.env.AURRIQ_PUBLIC_URL ?? "https://aurriq.doabookpro.com"}/seller/dashboard`,
       });
@@ -225,10 +250,113 @@ export const applyMarketplaceSubscription = internalMutation({
     await ctx.runMutation(internal.notifications.createNotification, {
       userId: user._id,
       type: "payment",
-      title: "Your Aurriq storefront is ready",
-      body: "Congratulations and welcome to the Aurriq family. Your seller dashboard is now active.",
+      title: wasRenewal ? "Your vendor dashboard is reinstated" : "Your Aurriq storefront is ready",
+      body: wasRenewal ? "Thank you for renewing. Your seller dashboard is active again." : "Congratulations and welcome to the Aurriq family. Your seller dashboard is now active.",
       link: "/seller/dashboard",
     });
+    await ctx.scheduler.runAfter(0, (internal as any).aurriqHistory.sendHistoryEvent, {
+      eventType: wasRenewal ? "renewal_approved" : "activation_approved",
+      reference: args.paymentReference,
+      sellerId: String(user._id),
+      sellerName: user.name,
+      sellerEmail: user.email,
+      sellerPhone: user.phone,
+      storeName: user.name,
+      status: "approved",
+      note: wasRenewal
+        ? `Renewal/top-up approved. Paid until ${new Date(paidUntil).toISOString()}.`
+        : `Seller account activated. Paid until ${new Date(paidUntil).toISOString()}.`,
+    });
+  },
+});
+
+export const getMarketplaceSubscriptionState = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const user: any = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+    if (!user) return null;
+
+    const paidUntil = typeof user.marketplacePaidUntil === "number" ? user.marketplacePaidUntil : undefined;
+    const daysLeft = paidUntil ? Math.ceil((paidUntil - Date.now()) / DAY_MS) : undefined;
+    const effectivelyExpired = user.marketplaceSubscriptionStatus === "active" && paidUntil && paidUntil < Date.now();
+    return {
+      status: effectivelyExpired ? "locked" : user.marketplaceSubscriptionStatus,
+      paidUntil,
+      daysLeft: effectivelyExpired ? 0 : daysLeft,
+      isLocked: user.marketplaceSubscriptionStatus === "locked" || Boolean(effectivelyExpired),
+      isExpiringSoon: typeof daysLeft === "number" && daysLeft >= 0 && daysLeft <= 7,
+    };
+  },
+});
+
+export const runMarketplaceSubscriptionMaintenance = internalMutation({
+  args: {},
+  handler: async (ctx) => {
+    const sellers = (await ctx.db.query("users").collect()).filter((user: any) => user.isSeller || user.role === "seller");
+    let warned = 0;
+    let locked = 0;
+    const now = Date.now();
+
+    for (const seller of sellers) {
+      const paidUntil = typeof seller.marketplacePaidUntil === "number" ? seller.marketplacePaidUntil : undefined;
+      if (!paidUntil) continue;
+      const eventKey = new Date(paidUntil).toISOString().slice(0, 10);
+      const daysLeft = Math.ceil((paidUntil - now) / DAY_MS);
+
+      if (seller.marketplaceSubscriptionStatus === "active" && paidUntil < now) {
+        await ctx.db.patch(seller._id, {
+          marketplaceSubscriptionStatus: "locked",
+          marketplaceLockedAt: now,
+        });
+        await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+          userId: seller._id,
+          type: "payment",
+          title: "Vendor dashboard locked",
+          body: "Your Aurriq subscription has expired. Buyers can still check out, but your vendor dashboard is locked until renewal is approved.",
+          link: "/seller/dashboard",
+        });
+        await ctx.scheduler.runAfter(0, (internal as any).aurriqHistory.sendHistoryEvent, {
+          eventType: "subscription_locked",
+          reference: seller.marketplacePaymentReference ?? `AURRIQ-LOCK-${seller._id}-${eventKey}`,
+          sellerId: String(seller._id),
+          sellerName: seller.name,
+          sellerEmail: seller.email,
+          sellerPhone: seller.phone,
+          storeName: seller.name,
+          status: "locked",
+          note: `Vendor dashboard locked after subscription expired on ${eventKey}.`,
+        });
+        locked += 1;
+        continue;
+      }
+
+      if (seller.marketplaceSubscriptionStatus !== "active" || daysLeft < 0 || daysLeft > 7) continue;
+      const isLastDay = daysLeft <= 1;
+      const field = isLastDay ? "marketplaceLastDaySmsSentFor" : "marketplaceLastWeekSmsSentFor";
+      if (seller[field] === eventKey) continue;
+      const message = isLastDay
+        ? `${seller.name ?? "Aurriq vendor"}, your Aurriq seller subscription ends today. Renew now to avoid your vendor dashboard being locked. Use Top Up with your shop/vendor name as reference.`
+        : `${seller.name ?? "Aurriq vendor"}, your Aurriq seller subscription has ${daysLeft} day(s) left. Renew early to keep your dashboard active. Use Top Up with your shop/vendor name as reference.`;
+      if (seller.phone) {
+        await ctx.scheduler.runAfter(0, internal.sms.sendSMS, { to: seller.phone, message });
+      }
+      await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
+        userId: seller._id,
+        type: "payment",
+        title: isLastDay ? "Subscription ends today" : "Subscription expiring soon",
+        body: message,
+        link: "/seller/dashboard",
+      });
+      await ctx.db.patch(seller._id, { [field]: eventKey } as any);
+      warned += 1;
+    }
+
+    return { warned, locked };
   },
 });
 

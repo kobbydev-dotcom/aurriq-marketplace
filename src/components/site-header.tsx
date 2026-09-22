@@ -3,7 +3,7 @@ import { Unauthenticated, Authenticated, useQuery } from "convex/react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { api } from "../../convex/_generated/api";
 import { SignInButton } from "@/components/ui/signin.tsx";
-import { ShoppingCart, Menu, X, User, Store, LogOut } from "lucide-react";
+import { ShoppingCart, Menu, X, User, Store, LogOut, LifeBuoy } from "lucide-react";
 import { useState, useEffect } from "react";
 import { CATEGORIES } from "@/lib/constants.ts";
 import { motion } from "motion/react";
@@ -131,6 +131,11 @@ export default function SiteHeader() {
               <DropdownMenuContent align="end" className="w-56 bg-[#0A0600] border-[#C9930A]/20 text-[#F0EAE0]">
                 <DropdownMenuItem onClick={() => navigate("/profile")}><User className="mr-2 size-4" /> Profile</DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate("/seller/dashboard")}><Store className="mr-2 size-4" /> Vendor Dashboard</DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <a href="mailto:devagyemang@gmail.com?subject=Aurriq%20Support" className="cursor-pointer">
+                    <LifeBuoy className="mr-2 size-4" /> Support: +233 27 442 1221
+                  </a>
+                </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-[#C9930A]/10" />
                 <DropdownMenuItem 
                   className="text-red-400 cursor-pointer" 
@@ -209,6 +214,14 @@ export default function SiteHeader() {
               >
                 <Store className="size-4" /> Vendor Dashboard
               </button>
+              <a
+                href="mailto:devagyemang@gmail.com?subject=Aurriq%20Support"
+                onClick={() => setMenuOpen(false)}
+                className="flex items-center gap-2 py-2.5 text-sm text-left"
+                style={{ color: "rgba(240,234,224,0.85)" }}
+              >
+                <LifeBuoy className="size-4" /> Support: +233 27 442 1221
+              </a>
               <button
                 onClick={async () => {
                   setMenuOpen(false);

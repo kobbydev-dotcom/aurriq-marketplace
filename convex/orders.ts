@@ -2,6 +2,12 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 
+function assertSellerDashboardAccess(user: any) {
+  if (user.marketplaceSubscriptionStatus === "locked" || (typeof user.marketplacePaidUntil === "number" && user.marketplacePaidUntil < Date.now())) {
+    throw new ConvexError({ code: "FORBIDDEN", message: "Your seller dashboard is locked because your Aurriq subscription has expired. Renew your plan to continue managing orders." });
+  }
+}
+
 export const placeOrder = mutation({
   args: {
     buyerPhone: v.optional(v.string()),
@@ -255,6 +261,7 @@ export const updateOrderStatus = mutation({
     const order = await ctx.db.get(args.orderId);
     if (!order) throw new ConvexError({ code: "NOT_FOUND", message: "Order not found" });
     if (order.sellerId !== user._id) throw new ConvexError({ code: "FORBIDDEN", message: "Not your order" });
+    assertSellerDashboardAccess(user);
 
     await ctx.db.patch(args.orderId, { status: args.status });
 
@@ -292,6 +299,7 @@ export const markPaymentReceived = mutation({
     const order = await ctx.db.get(args.orderId);
     if (!order) throw new ConvexError({ code: "NOT_FOUND", message: "Order not found" });
     if (order.sellerId !== user._id) throw new ConvexError({ code: "FORBIDDEN", message: "Not your order" });
+    assertSellerDashboardAccess(user);
     if (order.paymentStatus === "paid") throw new ConvexError({ code: "BAD_REQUEST", message: "Payment already recorded" });
 
     const product = await ctx.db.get(order.productId);
@@ -358,6 +366,7 @@ export const markBalanceCollected = mutation({
     const order = await ctx.db.get(args.orderId);
     if (!order) throw new ConvexError({ code: "NOT_FOUND", message: "Order not found" });
     if (order.sellerId !== user._id) throw new ConvexError({ code: "FORBIDDEN", message: "Not your order" });
+    assertSellerDashboardAccess(user);
     if (order.balancePaid) throw new ConvexError({ code: "BAD_REQUEST", message: "Balance already settled" });
 
     await ctx.db.patch(args.orderId, {

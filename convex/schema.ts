@@ -45,6 +45,13 @@ export default defineSchema({
     marketplaceSubscriptionAmount: v.optional(v.number()),
     marketplacePaidUntil: v.optional(v.number()),
     marketplacePaymentReference: v.optional(v.string()),
+    marketplaceLockedAt: v.optional(v.number()),
+    marketplaceLastWeekSmsSentFor: v.optional(v.string()),
+    marketplaceLastDaySmsSentFor: v.optional(v.string()),
+    marketplaceRetentionEnabled: v.optional(v.boolean()),
+    marketplaceRetentionDays: v.optional(v.number()),
+    marketplaceRetentionTemplate: v.optional(v.string()),
+    marketplaceRetentionLastRunAt: v.optional(v.number()),
     deletionRequestedAt: v.optional(v.number()),
     deletionScheduledFor: v.optional(v.number()),
     isPendingDeletion: v.optional(v.boolean()),
@@ -139,6 +146,20 @@ export default defineSchema({
     meta: v.optional(v.any()),
   })
     .index("by_user", ["userId"]),
+
+  sellerRetentionReminders: defineTable({
+    sellerId: v.id("users"),
+    buyerId: v.id("users"),
+    buyerPhone: v.optional(v.string()),
+    lastOrderAt: v.number(),
+    sentAt: v.number(),
+    intervalDays: v.number(),
+    itemSummary: v.string(),
+    message: v.string(),
+    status: v.string(),
+  })
+    .index("by_seller", ["sellerId"])
+    .index("by_seller_buyer", ["sellerId", "buyerId"]),
 
   // Social follows — anyone can follow anyone.
   follows: defineTable({

@@ -12,6 +12,15 @@ async function getCurrentSeller(ctx: any) {
     .unique();
 }
 
+function assertSellerDashboardAccess(user: any) {
+  if (!(user?.isSeller || user?.role === "seller")) {
+    throw new Error("Activate your seller account before listing products.");
+  }
+  if (user.marketplaceSubscriptionStatus === "locked" || (typeof user.marketplacePaidUntil === "number" && user.marketplacePaidUntil < Date.now())) {
+    throw new Error("Your seller dashboard is locked because your Aurriq subscription has expired. Renew your plan to continue managing products.");
+  }
+}
+
 // Haversine distance in kilometers between two coordinates.
 function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
   const R = 6371;
@@ -215,9 +224,7 @@ export const createProduct = mutation({
       .unique();
 
     if (!user) throw new Error("User profile not found.");
-    if (!(user.isSeller || user.role === "seller")) {
-      throw new Error("Activate your seller account before listing products.");
-    }
+    assertSellerDashboardAccess(user);
 
     // Extract the main photo from the array if one exists
     const mainImageUrl = args.images.length > 0 ? args.images[0] : "";
@@ -385,6 +392,7 @@ export const updateProduct = mutation({
     const product = await ctx.db.get(args.productId);
     if (!product) throw new Error("Product not found");
     if (product.sellerId !== user._id) throw new Error("Not your product");
+    assertSellerDashboardAccess(user);
 
     const nextImages = args.images ?? product.images ?? [];
     const nextVariants = args.variants ?? product.variants;
@@ -452,6 +460,7 @@ export const deleteProduct = mutation({
     const product = await ctx.db.get(args.productId);
     if (!product) throw new Error("Product not found");
     if (product.sellerId !== user._id) throw new Error("Not your product");
+    assertSellerDashboardAccess(user);
 
     await ctx.db.delete(args.productId);
     return true;

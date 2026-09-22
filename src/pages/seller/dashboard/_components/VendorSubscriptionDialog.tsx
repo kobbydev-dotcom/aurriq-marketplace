@@ -27,11 +27,13 @@ export default function VendorSubscriptionDialog({
   onOpenChange,
   isDoaBookProPartner,
   pendingPaymentReference,
+  intent = "activation",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   isDoaBookProPartner: boolean;
   pendingPaymentReference?: string;
+  intent?: "activation" | "top_up";
 }) {
   const startSubscription = useAction((api.payments as any).startMarketplaceSubscription);
   const plans = isDoaBookProPartner ? PARTNER_PLANS : DIRECT_PLANS;
@@ -60,7 +62,7 @@ export default function VendorSubscriptionDialog({
       <DialogContent className="max-w-2xl max-h-[90dvh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Store className="size-5 text-primary" /> Activate your Aurriq storefront
+            <Store className="size-5 text-primary" /> {intent === "top_up" ? "Top up your Aurriq storefront" : "Activate your Aurriq storefront"}
           </DialogTitle>
           <DialogDescription>
             Marketplace access is a separate vendor subscription from any DOABookPro booking subscription.
@@ -112,12 +114,15 @@ export default function VendorSubscriptionDialog({
             <div className="rounded-xl border border-primary/30 bg-primary/5 p-4 text-sm">
               <p className="font-medium">Pay GHS {Number(paymentRequest.amount).toLocaleString()} for {paymentRequest.planLabel}</p>
               <p className="mt-2 text-muted-foreground">
-                Proceed with payment using any option below. Use your account name or store name as the payment reference.
+                Proceed with payment using any option below. {paymentRequest.requestType === "top_up" ? "Use Top Up with your shop or vendor name as the payment reference." : "Use your account name or store name as the payment reference."}
               </p>
               <p className="mt-2 text-muted-foreground">
-                After payment, check your dashboard again in about 5 minutes. Also make sure your Profile has an active phone number saved so you can receive your activation SMS.
+                After payment, check your dashboard again in about 5 minutes. Also make sure your Profile has an active phone number saved so you can receive your SMS.
               </p>
               <p className="mt-2 text-xs text-muted-foreground">Activation reference: {paymentRequest.reference}</p>
+            </div>
+            <div className="rounded-lg border border-border bg-card p-3 text-xs text-muted-foreground">
+              Need help or want to report an issue? Contact Aurriq Team on <span className="font-medium text-foreground">+233 27 442 1221</span> or <span className="font-medium text-foreground">devagyemang@gmail.com</span>.
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div className="rounded-lg border border-border p-4">

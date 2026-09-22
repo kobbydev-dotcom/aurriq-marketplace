@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api.js";
@@ -7,7 +7,7 @@ import { toast } from "sonner";
 import {
   Plus, Package, TrendingUp, AlertTriangle, ShoppingBag,
   MoreVertical, Pencil, Trash2, ToggleLeft, ToggleRight, Tag, MessageSquare, ArrowLeft,
-  Clock, CheckCircle, Truck, PackageCheck, XCircle, Store, CreditCard, Smartphone, ShieldCheck, Loader2, FileText, Landmark
+  Clock, CheckCircle, Truck, PackageCheck, XCircle, Store, CreditCard, Smartphone, ShieldCheck, Loader2, FileText, Landmark, Users, Send, Save, Lock, CalendarDays
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
@@ -48,6 +48,9 @@ import {
   SelectValue,
 } from "@/components/ui/select.tsx";
 import { formatCurrency } from "@/lib/utils.ts";
+
+const AURRIQ_SUPPORT_PHONE = "+233 27 442 1221";
+const AURRIQ_SUPPORT_EMAIL = "devagyemang@gmail.com";
 
 function StockBadge({ stock, threshold }: { stock: number; threshold: number }) {
   if (stock === 0) return <Badge variant="destructive" className="text-[10px]">Out of Stock</Badge>;
@@ -611,6 +614,7 @@ export default function SellerDashboardInner() {
   const getSellerOrdersQuery = ((api.orders as any).getSellerOrders || (api.products as any).listAll) as any;
   const getMyActivity = ((api.notifications as any).getMyActivity || (api.products as any).listAll) as any;
   const getTotalUnreadCount = ((api.messages as any).getTotalUnreadCount || (api.products as any).listAll) as any;
+  const getSubscriptionState = ((api.payments as any).getMarketplaceSubscriptionState || (api.products as any).listAll) as any;
   const updateProductEndpoint = ((api.products as any).updateProduct || (api.products as any).listAll) as any;
   const deleteProductEndpoint = ((api.products as any).deleteProduct || (api.products as any).listAll) as any;
   const updateProfileEndpoint = ((api.users as any).updateProfile || (api.products as any).listAll) as any;
@@ -621,6 +625,7 @@ export default function SellerDashboardInner() {
   const sellerOrders = useQuery(getSellerOrdersQuery, {});
   const activity = useQuery(getMyActivity, {});
   const unreadMessages = useQuery(getTotalUnreadCount, {}) as number | undefined;
+  const subscriptionState = useQuery(getSubscriptionState, {}) as any;
   
   const updateProduct = useMutation(updateProductEndpoint) as any;
   const deleteProduct = useMutation(deleteProductEndpoint) as any;
@@ -729,6 +734,41 @@ export default function SellerDashboardInner() {
           onOpenChange={setSubscriptionOpen}
           isDoaBookProPartner={Boolean((currentUser as any)?.doabookproSlug)}
           pendingPaymentReference={(currentUser as any)?.marketplaceSubscriptionStatus === "payment_pending" ? (currentUser as any)?.marketplacePaymentReference : undefined}
+          intent="activation"
+        />
+      </div>
+    );
+  }
+
+  if (subscriptionState?.isLocked) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-20 text-center space-y-6">
+        <div className="size-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto">
+          <Lock className="size-7 text-destructive" />
+        </div>
+        <div>
+          <h2 className="text-3xl font-light mb-2" style={{ fontFamily: "'Cormorant Garamond', serif" }}>
+            Vendor dashboard locked
+          </h2>
+          <p className="text-muted-foreground text-sm leading-relaxed max-w-md mx-auto">
+            Your Aurriq vendor subscription has expired. Buyers can still shop and check out from your storefront, but dashboard management is locked until renewal is approved.
+          </p>
+        </div>
+        <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-muted-foreground">
+          Once your renewal is approved, you will receive SMS and email confirmation. Nothing is deleted, so you can pick up from where you left off.
+        </div>
+        <Button size="lg" onClick={() => setSubscriptionOpen(true)} className="rounded-full px-10">
+          Renew Seller Account
+        </Button>
+        <p className="text-xs text-muted-foreground">
+          Need help? Contact Aurriq Team on {AURRIQ_SUPPORT_PHONE} or {AURRIQ_SUPPORT_EMAIL}.
+        </p>
+        <VendorSubscriptionDialog
+          open={subscriptionOpen}
+          onOpenChange={setSubscriptionOpen}
+          isDoaBookProPartner={Boolean((currentUser as any)?.doabookproSlug)}
+          pendingPaymentReference={(currentUser as any)?.marketplaceSubscriptionStatus === "payment_pending" ? (currentUser as any)?.marketplacePaymentReference : undefined}
+          intent="top_up"
         />
       </div>
     );
@@ -749,10 +789,29 @@ export default function SellerDashboardInner() {
             Welcome back, {currentUser?.name ?? "Seller"}
           </p>
         </div>
-        <Button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="gap-2">
-          <Plus className="size-4" /> Add Product
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          {subscriptionState?.paidUntil && (
+            <Button variant="outline" onClick={() => setSubscriptionOpen(true)} className="gap-2">
+              <CalendarDays className="size-4" /> Top Up Plan
+            </Button>
+          )}
+          <Button onClick={() => { setEditTarget(null); setFormOpen(true); }} className="gap-2">
+            <Plus className="size-4" /> Add Product
+          </Button>
+        </div>
       </div>
+
+      {subscriptionState?.isExpiringSoon && (
+        <div className="mb-5 animate-pulse rounded-xl border border-destructive/40 bg-destructive/10 p-4 text-sm text-destructive">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="mt-0.5 size-5 shrink-0" />
+            <div>
+              <p className="font-semibold">Your Aurriq seller subscription is expiring soon.</p>
+              <p className="mt-1">You have {subscriptionState.daysLeft} day{subscriptionState.daysLeft === 1 ? "" : "s"} left. Renew early to prevent dashboard lock.</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Tabs: Products / Inventory & Revenue */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0">
@@ -770,6 +829,9 @@ export default function SellerDashboardInner() {
           </TabsTrigger>
           <TabsTrigger value="orders" className="gap-2 cursor-pointer">
             <ShoppingBag className="size-3.5" /> Orders
+          </TabsTrigger>
+          <TabsTrigger value="buyers" className="gap-2 cursor-pointer">
+            <Users className="size-3.5" /> Buyers
           </TabsTrigger>
           <TabsTrigger value="rfqs" className="gap-2 cursor-pointer">
             <FileText className="size-3.5" /> RFQs
@@ -881,6 +943,10 @@ export default function SellerDashboardInner() {
           <SellerOrdersTab onContactBuyer={(buyerId) => { setSelectedBuyerId(buyerId); setActiveTab("messages"); }} />
         </TabsContent>
 
+        <TabsContent value="buyers">
+          <BuyersRetentionTab />
+        </TabsContent>
+
         <TabsContent value="rfqs">
           <SellerRfqsTab />
         </TabsContent>
@@ -937,6 +1003,132 @@ export default function SellerDashboardInner() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <VendorSubscriptionDialog
+        open={subscriptionOpen}
+        onOpenChange={setSubscriptionOpen}
+        isDoaBookProPartner={Boolean((currentUser as any)?.doabookproSlug)}
+        pendingPaymentReference={(currentUser as any)?.marketplaceSubscriptionStatus === "payment_pending" ? (currentUser as any)?.marketplacePaymentReference : undefined}
+        intent="top_up"
+      />
+    </div>
+  );
+}
+
+function BuyersRetentionTab() {
+  const retention = useQuery(((api as any).retention as any).getSellerBuyerHistory, {}) as any;
+  const updateSettings = useMutation(((api as any).retention as any).updateRetentionSettings) as any;
+  const sendReminder = useMutation(((api as any).retention as any).sendBuyerRetentionSms) as any;
+  const [saving, setSaving] = useState(false);
+  const [sending, setSending] = useState<string | null>(null);
+  const [enabled, setEnabled] = useState(true);
+  const [days, setDays] = useState(30);
+  const [template, setTemplate] = useState("");
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!retention?.settings || settingsLoaded) return;
+      setEnabled(retention.settings.enabled ?? true);
+      setDays(retention.settings.days ?? 30);
+      setTemplate(retention.settings.template ?? "");
+      setSettingsLoaded(true);
+  }, [retention?.settings, settingsLoaded]);
+
+  if (retention === undefined) {
+    return <div className="space-y-3">{Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-xl" />)}</div>;
+  }
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await updateSettings({ enabled, days, template: template.trim() || undefined });
+      toast.success("Retention settings saved");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not save retention settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const send = async (buyerId: string) => {
+    setSending(buyerId);
+    try {
+      await sendReminder({ buyerId });
+      toast.success("Personalized SMS sent");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Could not send SMS");
+    } finally {
+      setSending(null);
+    }
+  };
+
+  return (
+    <div className="space-y-5">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base"><Users className="size-4" /> Client retention</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_140px]">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={enabled} onChange={(event) => setEnabled(event.target.checked)} />
+              Automatically send buyer check-in SMS after no purchase
+            </label>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={1}
+                max={365}
+                value={days}
+                onChange={(event) => setDays(Number(event.target.value) || 30)}
+                className="h-10 w-20 rounded-md border border-input bg-background px-3 py-2 text-sm"
+              />
+              <span className="text-sm text-muted-foreground">days</span>
+            </div>
+          </div>
+          <textarea
+            value={template}
+            onChange={(event) => setTemplate(event.target.value)}
+            rows={3}
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            placeholder="Optional custom message. Use {buyerName}, {sellerName}, {items}, {days}."
+          />
+          <Button onClick={save} disabled={saving} className="gap-2"><Save className="size-4" /> {saving ? "Saving..." : "Save Retention Settings"}</Button>
+        </CardContent>
+      </Card>
+
+      {retention.buyers.length === 0 ? (
+        <Empty>
+          <EmptyHeader>
+            <EmptyMedia variant="icon"><Users /></EmptyMedia>
+            <EmptyTitle>No buyers yet</EmptyTitle>
+            <EmptyDescription>Customers who buy from your shop will appear here with their last purchase history.</EmptyDescription>
+          </EmptyHeader>
+        </Empty>
+      ) : (
+        <div className="space-y-2">
+          {retention.buyers.map((buyer: any) => (
+            <Card key={buyer.buyerId}>
+              <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+                <div className="min-w-0">
+                  <p className="font-medium">{buyer.buyerName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Last bought {buyer.itemSummary} · {buyer.daysSinceLastOrder} day{buyer.daysSinceLastOrder === 1 ? "" : "s"} ago
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {buyer.totalOrders} order{buyer.totalOrders === 1 ? "" : "s"} · {formatCurrency(buyer.totalSpent ?? 0)}
+                    {buyer.lastReminderAt ? ` · last SMS ${formatDistanceToNow(buyer.lastReminderAt, { addSuffix: true })}` : ""}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" disabled={!buyer.buyerPhone || sending === buyer.buyerId} onClick={() => send(buyer.buyerId)} className="gap-2">
+                  {sending === buyer.buyerId ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+                  Send check-in
+                </Button>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
