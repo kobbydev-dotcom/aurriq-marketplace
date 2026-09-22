@@ -1,6 +1,27 @@
 import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 
+async function resolveMediaUrl(ctx: any, value: string | undefined | null): Promise<string> {
+  if (!value) return "";
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+  try {
+    return (await ctx.storage.getUrl(value as any)) ?? value;
+  } catch {
+    return value;
+  }
+}
+
+async function enrichProductMedia(ctx: any, product: any) {
+  const images = await Promise.all((product.images ?? []).map((media: string) => resolveMediaUrl(ctx, media)));
+  const videos = await Promise.all((product.videos ?? []).map((media: string) => resolveMediaUrl(ctx, media)));
+  return {
+    ...product,
+    images,
+    videos,
+    imageUrl: product.imageUrl ? await resolveMediaUrl(ctx, product.imageUrl) : (images[0] ?? ""),
+  };
+}
+
 export const getCartItems = query({
   args: {},
   handler: async (ctx) => {
@@ -23,10 +44,11 @@ export const getCartItems = query({
       items.map(async (item) => {
         const product = await ctx.db.get(item.productId);
         const seller = product ? await ctx.db.get(product.sellerId) : null;
+        const enrichedProduct = product ? await enrichProductMedia(ctx, product) : null;
         return {
           ...item,
-          product: product ? {
-            ...product,
+          product: enrichedProduct ? {
+            ...enrichedProduct,
             seller: seller ? {
               name: seller.name,
               paymentReceiptModes: (seller as any).paymentReceiptModes,

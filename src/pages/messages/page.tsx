@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api.js";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
+import { useSearchParams } from "react-router-dom";
 import { formatDistanceToNow } from "date-fns";
 import { Send, Phone, MessageSquare, ArrowLeft, Inbox } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
@@ -28,11 +29,18 @@ type Conversation = {
 function ConversationList({
   selectedId,
   onSelect,
+  onSelectedConversation,
 }: {
   selectedId: Id<"users"> | null;
-  onSelect: (id: Id<"users">) => void;
+  onSelect: (conversation: Conversation) => void;
+  onSelectedConversation?: (conversation: Conversation | null) => void;
 }) {
   const inbox = useQuery(api.messages.getInbox, {});
+
+  useEffect(() => {
+    if (!inbox || !selectedId) return;
+    onSelectedConversation?.(inbox.find((conv: Conversation) => conv.otherUserId === selectedId) ?? null);
+  }, [inbox, selectedId, onSelectedConversation]);
 
   if (inbox === undefined) {
     return (
@@ -61,7 +69,7 @@ function ConversationList({
       {inbox.map((conv: Conversation) => (
         <button
           key={conv.otherUserId}
-          onClick={() => onSelect(conv.otherUserId)}
+          onClick={() => onSelect(conv)}
           className={cn(
             "w-full text-left px-4 py-3 border-b border-border/30 hover:bg-muted/40 transition-colors",
             selectedId === conv.otherUserId && "bg-primary/10 border-l-2 border-l-primary"
@@ -109,12 +117,11 @@ function ConversationList({
   );
 }
 
-function ConversationView({ otherUserId }: { otherUserId: Id<"users"> }) {
+function ConversationView({ otherUserId, conversation }: { otherUserId: Id<"users">; conversation?: Conversation | null }) {
   const messages = useQuery(api.messages.getConversation, { otherUserId });
   const markRead = useMutation(api.messages.markConversationAsRead);
   const sendMessage = useMutation(api.messages.sendMessage);
   const me = useQuery(api.users.current, {});
-  const otherUser = useQuery(api.users.current, { userId: otherUserId } as any) as any;
 
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
@@ -160,7 +167,7 @@ function ConversationView({ otherUserId }: { otherUserId: Id<"users"> }) {
     }
   };
 
-  if (messages === undefined || otherUser === undefined) {
+  if (messages === undefined) {
     return (
       <div className="flex-1 flex items-center justify-center">
         <Skeleton className="h-10 w-40" />
@@ -172,16 +179,16 @@ function ConversationView({ otherUserId }: { otherUserId: Id<"users"> }) {
     <div className="flex flex-col h-full">
       {/* Header */}
       <div className="flex items-center gap-3 px-4 py-3 border-b border-border/40 bg-card/60">
-        {otherUser?.avatar ? (
-          <img src={otherUser.avatar} alt={otherUser.name} className="size-8 rounded-full object-cover border border-border" />
+        {conversation?.otherUserAvatar ? (
+          <img src={conversation?.otherUserAvatar} alt={conversation?.otherUserName ?? "User"} className="size-8 rounded-full object-cover border border-border" />
         ) : (
           <div className="size-8 rounded-full bg-primary/20 flex items-center justify-center">
-            <span className="text-xs font-bold text-primary">{(otherUser?.name ?? "?").charAt(0).toUpperCase()}</span>
+            <span className="text-xs font-bold text-primary">{(conversation?.otherUserName ?? "?").charAt(0).toUpperCase()}</span>
           </div>
         )}
         <div className="flex-1">
-          <p className="text-sm font-semibold">{otherUser?.name ?? "Unknown"}</p>
-          <p className="text-xs text-muted-foreground capitalize">{otherUser?.role ?? "user"}</p>
+          <p className="text-sm font-semibold">{conversation?.otherUserName ?? "Conversation"}</p>
+          <p className="text-xs text-muted-foreground">{conversation?.productName ? `Re: ${conversation.productName}` : "Private Aurriq conversation"}</p>
         </div>
         <Button
           variant="ghost"
@@ -259,7 +266,27 @@ function ConversationView({ otherUserId }: { otherUserId: Id<"users"> }) {
 }
 
 function MessagesInner() {
-  const [selectedUserId, setSelectedUserId] = useState<Id<"users"> | null>(null);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialUser = searchParams.get("user") as Id<"users"> | null;
+  const [selectedUserId, setSelectedUserId] = useState<Id<"users"> | null>(initialUser);
+  const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null);
+
+  useEffect(() => {
+    const nextUser = searchParams.get("user") as Id<"users"> | null;
+    if (nextUser && nextUser !== selectedUserId) setSelectedUserId(nextUser);
+  }, [searchParams, selectedUserId]);
+
+  const selectConversation = (conversation: Conversation) => {
+    setSelectedUserId(conversation.otherUserId);
+    setSelectedConversation(conversation);
+    setSearchParams({ user: conversation.otherUserId });
+  };
+
+  const clearSelection = () => {
+    setSelectedUserId(null);
+    setSelectedConversation(null);
+    setSearchParams({});
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -279,7 +306,11 @@ function MessagesInner() {
             <p className="text-xs font-semibold uppercase tracking-widest text-muted-foreground">Inbox</p>
           </div>
           <Authenticated>
-            <ConversationList selectedId={selectedUserId} onSelect={setSelectedUserId} />
+            <ConversationList
+              selectedId={selectedUserId}
+              onSelect={selectConversation}
+              onSelectedConversation={setSelectedConversation}
+            />
           </Authenticated>
         </div>
 
@@ -289,13 +320,13 @@ function MessagesInner() {
             <>
               {/* Back button (mobile) */}
               <button
-                onClick={() => setSelectedUserId(null)}
+                onClick={clearSelection}
                 className="md:hidden flex items-center gap-1.5 text-xs text-muted-foreground px-4 py-2 border-b border-border/30 hover:text-primary transition-colors cursor-pointer"
               >
                 <ArrowLeft className="size-3.5" /> Back to inbox
               </button>
               <Authenticated>
-                <ConversationView otherUserId={selectedUserId} />
+                <ConversationView otherUserId={selectedUserId} conversation={selectedConversation} />
               </Authenticated>
             </>
           ) : (

@@ -87,6 +87,74 @@ export const getUnreadCount = query({
   },
 });
 
+export const getNavBadgeCounts = query({
+  args: {},
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) {
+      return { cart: 0, orders: 0, messages: 0, wishlist: 0, seller: 0 };
+    }
+    const user = await currentMarketplaceUser(ctx, identity);
+    if (!user) return { cart: 0, orders: 0, messages: 0, wishlist: 0, seller: 0 };
+
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    const unread = notifications.filter((notification) => !notification.isRead);
+
+    const cartItems = await ctx.db
+      .query("cartItems")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+
+    const receivedMessages = await ctx.db
+      .query("messages")
+      .withIndex("by_receiver", (q) => q.eq("receiverId", user._id))
+      .collect();
+
+    const orderTypes = new Set(["order_status", "payment"]);
+    const sellerTypes = new Set(["order_placed", "low_stock", "profile_visit", "store_visit"]);
+    const wishlistTypes = new Set(["back_in_stock"]);
+    const isActiveSeller = Boolean((user as any).isSeller || user.role === "seller") &&
+      (user as any).marketplaceSubscriptionStatus !== "locked";
+
+    return {
+      cart: cartItems.reduce((sum, item) => sum + (item.quantity ?? 1), 0),
+      orders: unread.filter((notification) => orderTypes.has(notification.type)).length,
+      messages: receivedMessages.filter((message) => !message.isRead).length,
+      wishlist: unread.filter((notification) => wishlistTypes.has(notification.type)).length,
+      seller: isActiveSeller ? unread.filter((notification) => sellerTypes.has(notification.type)).length : 0,
+    };
+  },
+});
+
+export const markNotificationsBySurfaceRead = mutation({
+  args: { surface: v.union(v.literal("orders"), v.literal("wishlist"), v.literal("seller")) },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new Error("Not authenticated");
+    const user = await currentMarketplaceUser(ctx, identity);
+    if (!user) return;
+
+    const typeMap: Record<string, string[]> = {
+      orders: ["order_status", "payment"],
+      wishlist: ["back_in_stock"],
+      seller: ["order_placed", "low_stock", "profile_visit", "store_visit"],
+    };
+    const types = new Set(typeMap[args.surface] ?? []);
+    const notifications = await ctx.db
+      .query("notifications")
+      .withIndex("by_user", (q) => q.eq("userId", user._id))
+      .collect();
+    await Promise.all(
+      notifications
+        .filter((notification) => !notification.isRead && types.has(notification.type))
+        .map((notification) => ctx.db.patch(notification._id, { isRead: true }))
+    );
+  },
+});
+
 export const markNotificationRead = mutation({
   args: { notificationId: v.id("notifications") },
   handler: async (ctx, args) => {

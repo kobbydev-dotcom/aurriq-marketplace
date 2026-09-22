@@ -1,5 +1,6 @@
 import { v, ConvexError } from "convex/values";
 import { mutation, query, QueryCtx, MutationCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 
 /**
@@ -41,7 +42,7 @@ export const sendMessage = mutation({
     if (sender._id === args.receiverId) {
       throw new ConvexError({ message: "Cannot message yourself", code: "BAD_REQUEST" });
     }
-    return await ctx.db.insert("messages", {
+    const messageId = await ctx.db.insert("messages", {
       senderId: sender._id,
       receiverId: args.receiverId,
       productId: args.productId,
@@ -49,6 +50,14 @@ export const sendMessage = mutation({
       isRead: false,
       type: args.type,
     });
+    await ctx.runMutation(internal.notifications.createNotification, {
+      userId: args.receiverId,
+      type: args.type,
+      title: args.type === "call_request" ? "Call request" : "New message",
+      body: args.type === "call_request" ? `${sender.name ?? "Someone"} requested a call.` : `${sender.name ?? "Someone"}: ${args.content}`,
+      link: `/messages?user=${sender._id}`,
+    });
+    return messageId;
   },
 });
 

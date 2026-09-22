@@ -1,26 +1,44 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { ShoppingBag, ShoppingCart, MessageSquare, ClipboardList, LayoutDashboard, Heart } from "lucide-react";
-import { Authenticated, Unauthenticated } from "convex/react";
+import { Authenticated, Unauthenticated, useMutation, useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api.js";
 import { SignInButton } from "@/components/ui/signin.tsx";
 import { NotificationBell } from "@/components/notifications.tsx";
 import { cn } from "@/lib/utils";
 
 const navLinks = [
-  { path: "/shop", label: "Shop", icon: <ShoppingBag className="size-4" /> },
-  { path: "/cart", label: "Cart", icon: <ShoppingCart className="size-4" /> },
-  { path: "/orders", label: "Orders", icon: <ClipboardList className="size-4" /> },
-  { path: "/messages", label: "Messages", icon: <MessageSquare className="size-4" /> },
-  { path: "/wishlist", label: "Wishlist", icon: <Heart className="size-4" /> },
-  { path: "/seller/dashboard", label: "My Shop", icon: <LayoutDashboard className="size-4" /> },
-  { path: "/buyer/dashboard", label: "Buyer Dashboard", icon: <ShoppingCart className="size-4" /> }, // New buyer dashboard link
+  { path: "/shop", label: "Shop", icon: <ShoppingBag className="size-4" />, badgeKey: null },
+  { path: "/cart", label: "Cart", icon: <ShoppingCart className="size-4" />, badgeKey: "cart" },
+  { path: "/orders", label: "Orders", icon: <ClipboardList className="size-4" />, badgeKey: "orders", clearSurface: "orders" },
+  { path: "/messages", label: "Messages", icon: <MessageSquare className="size-4" />, badgeKey: "messages" },
+  { path: "/wishlist", label: "Wishlist", icon: <Heart className="size-4" />, badgeKey: "wishlist", clearSurface: "wishlist" },
+  { path: "/seller/dashboard", label: "My Shop", icon: <LayoutDashboard className="size-4" />, badgeKey: "seller", clearSurface: "seller" },
+  { path: "/buyer/dashboard", label: "Buyer Dashboard", icon: <ShoppingCart className="size-4" />, badgeKey: null },
 ];
 
 export default function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
+  const badgeCounts = useQuery((api.notifications as any).getNavBadgeCounts, {}) as Record<string, number> | undefined;
+  const markSurfaceRead = useMutation((api.notifications as any).markNotificationsBySurfaceRead) as any;
 
-  const handleNavClick = (path: string) => {
+  const handleNavClick = (path: string, clearSurface?: string) => {
+    if (clearSurface) void markSurfaceRead({ surface: clearSurface }).catch(() => undefined);
     navigate(path);
+  };
+
+  const renderIcon = (link: typeof navLinks[number]) => {
+    const count = link.badgeKey ? (badgeCounts?.[link.badgeKey] ?? 0) : 0;
+    return (
+      <span className="relative inline-flex">
+        {link.icon}
+        {count > 0 && (
+          <span className="absolute -right-2 -top-2 flex min-w-4 h-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
+            {count > 99 ? "99+" : count}
+          </span>
+        )}
+      </span>
+    );
   };
 
   return (
@@ -37,14 +55,14 @@ export default function AppLayout() {
           {/* Desktop nav */}
           <nav className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => (
-              <button key={link.path} onClick={() => handleNavClick(link.path)}
+              <button key={link.path} onClick={() => handleNavClick(link.path, link.clearSurface)}
                 className={cn(
                   "flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors cursor-pointer",
                   location.pathname === link.path
                     ? "bg-primary/10 text-primary font-medium"
                     : "text-muted-foreground hover:text-foreground hover:bg-muted"
                 )}>
-                {link.icon} {link.label}
+                {renderIcon(link)} {link.label}
               </button>
             ))}
           </nav>
@@ -66,12 +84,12 @@ export default function AppLayout() {
       {/* Mobile bottom nav */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 flex md:hidden border-t border-border bg-background">
         {navLinks.map((link) => (
-          <button key={link.path} onClick={() => handleNavClick(link.path)}
+          <button key={link.path} onClick={() => handleNavClick(link.path, link.clearSurface)}
             className={cn(
               "flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] cursor-pointer transition-colors",
               location.pathname === link.path ? "text-primary" : "text-muted-foreground"
             )}>
-            {link.icon}
+            {renderIcon(link)}
             <span>{link.label}</span>
           </button>
         ))}

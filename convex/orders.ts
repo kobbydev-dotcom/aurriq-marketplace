@@ -32,6 +32,19 @@ function orderReference(order: any) {
   return String(order.paymentReference ?? order._id);
 }
 
+function deliveryLabel(value?: string) {
+  const labels: Record<string, string> = {
+    within_1_hour: "within 1 hour",
+    same_day: "same day",
+    one_day: "1 day",
+    two_days: "2 days",
+    accra_same_day: "same day in Accra",
+    outside_accra_2_3_days: "2-3 days outside Accra",
+    arranged_with_buyer: "as arranged with the seller",
+  };
+  return value ? labels[value] ?? value : undefined;
+}
+
 async function notifyBuyerBySmsAndEmail(ctx: any, order: any, product: any, buyer: any, title: string, message: string) {
   const phone = order.buyerPhone ?? buyer?.phone;
   const email = order.receiptEmail ?? buyer?.email;
@@ -57,6 +70,27 @@ async function notifyBuyerBySmsAndEmail(ctx: any, order: any, product: any, buye
       ctaUrl: "https://aurriq.doabookpro.com/orders",
     });
   }
+}
+
+async function notifyBuyerOrderReceived(ctx: any, order: any, product: any, buyer: any) {
+  const delivery = deliveryLabel((product as any)?.deliveryPeriod);
+  const trackingUrl = `https://aurriq.doabookpro.com/orders?order=${order._id}`;
+  const message = [
+    `AURRIQ: Your order for ${product?.name ?? "your item"} has been received.`,
+    `Ref ${orderReference(order)}.`,
+    "Payment will be confirmed shortly and you will be notified once payment is received and the order is dispatched.",
+    delivery ? `Expected delivery/pickup: ${delivery}.` : "",
+    `Track here: ${trackingUrl}`,
+  ].filter(Boolean).join(" ");
+
+  await notifyBuyerBySmsAndEmail(ctx, order, product, buyer, "Order received", message);
+  await ctx.runMutation(internal.notifications.createNotification, {
+    userId: order.buyerId,
+    type: "order_status",
+    title: "Order received",
+    body: message,
+    link: `/orders?order=${order._id}`,
+  });
 }
 
 function statusMessage(status: string, productName: string, reference: string) {
@@ -215,6 +249,10 @@ export const placeOrder = mutation({
         balancePaid: mode === "partial" ? false : undefined,
       });
       orderIds.push(orderId);
+      const insertedOrder = await ctx.db.get(orderId);
+      if (insertedOrder) {
+        await notifyBuyerOrderReceived(ctx, insertedOrder, product, user);
+      }
 
       // Notify the seller instantly (SMS + optional email + in-app) about the new order.
       await ctx.scheduler.runAfter(0, (internal as any).receipts.notifySellerOfOrder, {
