@@ -25,6 +25,19 @@ import {
 import { Textarea } from "@/components/ui/textarea.tsx";
 import { formatCurrency } from "@/lib/utils.ts";
 
+function deliveryLabel(value?: string) {
+  const labels: Record<string, string> = {
+    within_1_hour: "Within 1 hour",
+    same_day: "Same day",
+    one_day: "1 day",
+    two_days: "2 days",
+    accra_same_day: "Accra: same day",
+    outside_accra_2_3_days: "Outside Accra: 2-3 days",
+    arranged_with_buyer: "Arranged with buyer",
+  };
+  return value ? labels[value] ?? value : undefined;
+}
+
 export default function ProductDetailPage() {
   const { productId } = useParams<{ productId: string }>();
   const product = useQuery(
@@ -247,7 +260,10 @@ export default function ProductDetailPage() {
   const wholesaleMinQty = (product as any).wholesaleMinQty as number | undefined;
   const wholesaleActive = wholesalePrice != null && wholesaleMinQty != null;
   const unitPrice = wholesaleActive && qty >= (wholesaleMinQty ?? Infinity) ? wholesalePrice! : activePrice;
+  const lineTotal = unitPrice * qty;
   const wholesaleSavings = wholesaleActive ? Math.round(((activePrice - wholesalePrice!) / activePrice) * 100) : 0;
+  const deliveryPeriod = (product as any).deliveryPeriod as string | undefined;
+  const deliveryNotes = (product as any).deliveryNotes as string | undefined;
 
   return (
     <div className="max-w-5xl mx-auto px-4 py-8">
@@ -368,7 +384,19 @@ export default function ProductDetailPage() {
                 )}
               </p>
             )}
+            {qty > 1 && (
+              <p className="text-xs text-primary mt-1">
+                Total for {qty} unit{qty === 1 ? "" : "s"}: <span className="font-semibold">{formatCurrency(lineTotal)}</span>
+              </p>
+            )}
           </div>
+
+          {deliveryLabel(deliveryPeriod) && (
+            <div className="rounded-lg border border-border bg-card px-4 py-3 text-sm">
+              <p className="font-medium">Delivery / pickup period</p>
+              <p className="text-muted-foreground mt-0.5">{deliveryLabel(deliveryPeriod)}{deliveryNotes ? ` - ${deliveryNotes}` : ""}</p>
+            </div>
+          )}
 
           {/* Description */}
           <div>

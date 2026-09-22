@@ -66,7 +66,7 @@ function OrderCard({
     balanceAmount?: number;
     depositPaid?: boolean;
     balancePaid?: boolean;
-    product: { _id: string; name: string; brand: string; images: string[] } | null;
+    product: { _id: string; name: string; brand: string; images: string[]; videos?: string[]; deliveryPeriod?: string; deliveryNotes?: string } | null;
     sellerName: string;
   };
 }) {
@@ -77,15 +77,17 @@ function OrderCard({
     <div className="bg-card border border-border rounded-xl p-5 space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div className="flex gap-3">
-          <div className="size-14 rounded-lg overflow-hidden bg-muted shrink-0">
+          <Link to={order.product ? `/product/${order.product._id}` : "#"} className="size-14 rounded-lg overflow-hidden bg-muted shrink-0">
             {order.product?.images[0] ? (
               <img src={order.product.images[0]} alt={order.product.name} className="w-full h-full object-cover" />
+            ) : order.product?.videos?.[0] ? (
+              <video src={order.product.videos[0]} className="h-full w-full object-cover" muted playsInline preload="metadata" />
             ) : (
               <div className="w-full h-full flex items-center justify-center">
                 <Package className="size-6 text-muted-foreground/30" />
               </div>
             )}
-          </div>
+          </Link>
           <div>
             <p className="text-xs text-muted-foreground uppercase tracking-widest mb-0.5">
               {order.product?.brand ?? "—"}

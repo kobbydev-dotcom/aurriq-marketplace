@@ -1,17 +1,17 @@
 import { ShieldCheck, AlertTriangle, Eye, Lock, CreditCard } from "lucide-react";
 
 const BUYER_TIPS = [
-  { icon: CreditCard, text: "Never pay outside Aurriq's official checkout — no bank transfers, no mobile money to strangers." },
-  { icon: Eye, text: "Verify product photos match what you receive. Report discrepancies within 48 hours." },
+  { icon: CreditCard, text: "Use only the seller payment details shown at checkout, and use your name or order name as the reference." },
+  { icon: Eye, text: "Confirm stock, delivery timing, and product condition before sending payment." },
   { icon: Lock, text: "Do not share your bank details, OTP codes, or passwords with any seller via chat." },
-  { icon: AlertTriangle, text: "If a deal seems too good to be true, report the listing before purchasing." },
+  { icon: AlertTriangle, text: "If payment details change outside checkout or a deal feels suspicious, contact Aurriq support before paying." },
 ];
 
 const SELLER_TIPS = [
   { icon: ShieldCheck, text: "Never share your Aurriq account credentials with buyers or third parties." },
   { icon: Eye, text: "Use real, accurate product photos and descriptions to build buyer trust." },
-  { icon: AlertTriangle, text: "Report buyers who attempt to pay outside the platform or request personal banking info." },
-  { icon: Lock, text: "Keep your contact details private until an order is confirmed through official channels." },
+  { icon: AlertTriangle, text: "Confirm payment in your own MoMo or bank records before marking an order paid." },
+  { icon: Lock, text: "Keep your saved payout details accurate so buyers see the right receipt instructions." },
 ];
 
 type Props = {
@@ -31,8 +31,8 @@ export function TrustSafetyBanner({ variant, compact = false }: Props) {
           <p className="font-semibold mb-1">{title}</p>
           <p className="text-amber-400/80">
             {variant === "buyer"
-              ? "Never pay outside Aurriq. Always verify products. Report suspicious listings."
-              : "Use real photos. Never share credentials. Report suspicious buyers."}
+              ? "Use only checkout payment details. Confirm stock and delivery timing. Report suspicious listings."
+              : "Confirm payment before delivery. Use real photos. Keep payout details accurate."}
           </p>
         </div>
       </div>

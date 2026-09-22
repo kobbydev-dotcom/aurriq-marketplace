@@ -37,6 +37,19 @@ const BUSINESS_LABEL: Record<string, string> = {
   other: "Beauty Pro",
 };
 
+function deliveryLabel(value?: string) {
+  const labels: Record<string, string> = {
+    within_1_hour: "Within 1 hour",
+    same_day: "Same day",
+    one_day: "1 day",
+    two_days: "2 days",
+    accra_same_day: "Accra: same day",
+    outside_accra_2_3_days: "Outside Accra: 2-3 days",
+    arranged_with_buyer: "Arranged with buyer",
+  };
+  return value ? labels[value] ?? value : undefined;
+}
+
 // Fix Leaflet's default marker icons (broken by bundlers).
 delete (L.Icon.Default.prototype as any)._getIconUrl;
 L.Icon.Default.mergeOptions({
@@ -474,6 +487,11 @@ export default function ShopPage() {
                   
                   <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{p.brand}</p>
                   <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{p.name}</p>
+                  {deliveryLabel((p as any).deliveryPeriod) && (
+                    <p className="mt-0.5 truncate text-[10px] text-muted-foreground">
+                      Delivery: {deliveryLabel((p as any).deliveryPeriod)}
+                    </p>
+                  )}
                   
                   {/* UPGRADE: Elegant color variations display using your micro styling rules */}
                   {p.variants && p.variants.length > 0 && (

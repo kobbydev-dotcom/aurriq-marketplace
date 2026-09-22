@@ -73,6 +73,8 @@ export default defineSchema({
     imageUrl: v.optional(v.string()),
     images: v.optional(v.array(v.string())),
     videos: v.optional(v.array(v.string())),
+    deliveryPeriod: v.optional(v.string()),
+    deliveryNotes: v.optional(v.string()),
     category: v.string(),
     sellerId: v.id("users"),
     inventory: v.optional(v.number()),
@@ -86,9 +88,8 @@ export default defineSchema({
     brand: v.optional(v.string()),
     variants: v.optional(v.any()),
     tags: v.optional(v.array(v.string())),
-    // How the seller accepts payment for this product:
-    // "momo" = online/mobile-money via Aurriq only, "cod" = cash on delivery,
-    // "negotiable" = price/method arranged with buyer, "partial" = deposit % now, balance on delivery.
+    // How the seller accepts payment for this product. Payments are currently
+    // confirmed manually by the seller using their saved receipt methods.
     paymentOptions: v.optional(
       v.object({
         mode: v.string(),

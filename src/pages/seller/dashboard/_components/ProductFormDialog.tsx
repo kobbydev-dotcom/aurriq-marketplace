@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -53,6 +53,8 @@ const schema = z
     paymentMode: z.enum(["momo", "cod", "negotiable", "partial"]).default("momo"),
     acceptedPaymentModes: z.array(z.string()).default(["momo"]),
     depositPercent: z.coerce.number().int().min(1).max(100).optional(),
+    deliveryPeriod: z.string().min(1, "Select a delivery period"),
+    deliveryNotes: z.string().optional(),
     tags: z.string().optional(),
   })
   .refine(
@@ -111,6 +113,8 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           paymentMode: ((editProduct as any).paymentOptions?.mode ?? "momo") as FormValues["paymentMode"],
           acceptedPaymentModes: (editProduct as any).paymentOptions?.acceptedModes ?? [((editProduct as any).paymentOptions?.mode ?? "momo")],
           depositPercent: (editProduct as any).paymentOptions?.percent ?? 50,
+          deliveryPeriod: (editProduct as any).deliveryPeriod ?? "same_day",
+          deliveryNotes: (editProduct as any).deliveryNotes ?? "",
           offerWholesale: (editProduct as any).wholesalePrice != null,
           wholesalePrice: (editProduct as any).wholesalePrice,
           wholesaleMinQty: (editProduct as any).wholesaleMinQty ?? 5,
@@ -122,6 +126,8 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           paymentMode: "momo",
           acceptedPaymentModes: ["momo"],
           depositPercent: 50,
+          deliveryPeriod: "same_day",
+          deliveryNotes: "",
           offerWholesale: false,
           wholesaleMinQty: 5,
         },
@@ -144,6 +150,43 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
   const imageInputRef = useRef<HTMLInputElement | null>(null);
   const videoInputRef = useRef<HTMLInputElement | null>(null);
   const generateUploadUrl = useMutation((api.products as any).generateUploadUrl);
+
+  useEffect(() => {
+    const nextValues = editProduct
+      ? {
+          name: editProduct.name,
+          brand: editProduct.brand,
+          description: editProduct.description,
+          category: editProduct.category,
+          originalPrice: editProduct.originalPrice,
+          promoPrice: editProduct.promoPrice,
+          stockQuantity: editProduct.stockQuantity,
+          lowStockThreshold: editProduct.lowStockThreshold,
+          paymentMode: ((editProduct as any).paymentOptions?.mode ?? "momo") as FormValues["paymentMode"],
+          acceptedPaymentModes: (editProduct as any).paymentOptions?.acceptedModes ?? [((editProduct as any).paymentOptions?.mode ?? "momo")],
+          depositPercent: (editProduct as any).paymentOptions?.percent ?? 50,
+          deliveryPeriod: (editProduct as any).deliveryPeriod ?? "same_day",
+          deliveryNotes: (editProduct as any).deliveryNotes ?? "",
+          offerWholesale: (editProduct as any).wholesalePrice != null,
+          wholesalePrice: (editProduct as any).wholesalePrice,
+          wholesaleMinQty: (editProduct as any).wholesaleMinQty ?? 5,
+          tags: editProduct.tags?.join(", ") ?? "",
+        }
+      : {
+          stockQuantity: 0,
+          lowStockThreshold: 5,
+          paymentMode: "momo" as const,
+          acceptedPaymentModes: ["momo"],
+          depositPercent: 50,
+          deliveryPeriod: "same_day",
+          deliveryNotes: "",
+          offerWholesale: false,
+          wholesaleMinQty: 5,
+        };
+    reset(nextValues as any);
+    setImageMedia((editProduct?.images ?? []).filter(Boolean).map((u) => ({ value: u, previewUrl: u })));
+    setVideoMedia((editProduct?.videos ?? []).filter(Boolean).map((u) => ({ value: u, previewUrl: u })));
+  }, [editProduct, open, reset]);
 
   const uploadFile = async (file: File): Promise<string> => {
     const uploadUrl = await generateUploadUrl();
@@ -237,6 +280,8 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           lowStockThreshold: data.lowStockThreshold,
           images,
           videos,
+          deliveryPeriod: data.deliveryPeriod,
+          deliveryNotes: data.deliveryNotes?.trim() || undefined,
           tags,
           paymentOptions,
           wholesalePrice,
@@ -255,6 +300,8 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           lowStockThreshold: data.lowStockThreshold,
           images,
           videos,
+          deliveryPeriod: data.deliveryPeriod,
+          deliveryNotes: data.deliveryNotes?.trim() || undefined,
           tags,
           paymentOptions,
           wholesalePrice,
@@ -293,9 +340,9 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
           <div>
             <p className="font-semibold mb-0.5">Seller Protection Tips</p>
             <ul className="space-y-0.5 text-amber-400/80 list-disc list-inside">
-              <li>Only use Aurriq's official payment flow. Never accept outside transfers.</li>
+              <li>Confirm stock, buyer details, and payment reference before preparing delivery.</li>
               <li>Keep proof of your products — receipts, photos, packing records.</li>
-              <li>Do not share your personal phone number publicly in product descriptions.</li>
+              <li>Use only the payment receipt details saved in your seller profile.</li>
               <li>Report suspicious buyers through the platform immediately.</li>
             </ul>
           </div>
@@ -402,10 +449,10 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
             <Label>How do you want to be paid? *</Label>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {([
-                { value: "momo", label: "Online / MoMo (strictly)", desc: "Buyer pays in full through Aurriq's secure checkout before you deliver." },
+                { value: "momo", label: "Direct Seller Payment", desc: "Buyer sees your selected MoMo or bank details, pays you directly, and waits for your confirmation." },
                 { value: "cod", label: "Cash on Delivery", desc: "Buyer pays in cash when the item is delivered." },
                 { value: "negotiable", label: "Negotiable", desc: "You and the buyer agree the price & payment method directly." },
-                { value: "partial", label: "Deposit + Balance", desc: "Buyer pays a deposit online now, and the rest on delivery." },
+                { value: "partial", label: "Deposit + Balance", desc: "Buyer pays the deposit to your selected receipt method, then settles the balance on delivery." },
               ] as const).map((opt) => (
                 <button
                   key={opt.value}
@@ -426,7 +473,7 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
                 <Label>Deposit percentage (%) *</Label>
                 <Input type="number" min={1} max={100} placeholder="e.g. 30" {...register("depositPercent")} />
                 <p className="text-[11px] text-muted-foreground">
-                  Buyer pays this % online now; the remaining balance is paid on delivery.
+                  Buyer pays this % to your selected receipt method; the remaining balance is paid on delivery.
                 </p>
                 {errors.depositPercent && <p className="text-destructive text-xs">{errors.depositPercent.message}</p>}
               </div>
@@ -469,6 +516,32 @@ export default function ProductFormDialog({ open, onClose, editProduct }: Props)
               <p className="text-[11px] text-muted-foreground">
                 Choose the payment methods you want displayed when buyers check out this product.
               </p>
+            </div>
+          </div>
+
+          {/* Delivery timing */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <Label>Delivery / pickup period *</Label>
+              <Select value={watch("deliveryPeriod")} onValueChange={(v) => setValue("deliveryPeriod", v, { shouldValidate: true })}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select delivery period" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="within_1_hour">Within 1 hour</SelectItem>
+                  <SelectItem value="same_day">Same day</SelectItem>
+                  <SelectItem value="one_day">1 day</SelectItem>
+                  <SelectItem value="two_days">2 days</SelectItem>
+                  <SelectItem value="accra_same_day">Accra: same day</SelectItem>
+                  <SelectItem value="outside_accra_2_3_days">Outside Accra: 2-3 days</SelectItem>
+                  <SelectItem value="arranged_with_buyer">Arranged with buyer</SelectItem>
+                </SelectContent>
+              </Select>
+              {errors.deliveryPeriod && <p className="text-destructive text-xs">{errors.deliveryPeriod.message}</p>}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Delivery note</Label>
+              <Input placeholder="e.g. Accra only, pickup available..." {...register("deliveryNotes")} />
             </div>
           </div>
 

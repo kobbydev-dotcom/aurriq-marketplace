@@ -37,8 +37,32 @@ type CartItem = {
     isActive: boolean;
     seller?: { name?: string; paymentReceiptModes?: any } | null;
     paymentOptions?: { mode: string; percent?: number; acceptedModes?: string[] } | null;
+    wholesalePrice?: number;
+    wholesaleMinQty?: number;
+    deliveryPeriod?: string;
+    deliveryNotes?: string;
   } | null;
 };
+
+function getUnitPrice(product: NonNullable<CartItem["product"]>, quantity: number) {
+  if (product.wholesalePrice != null && product.wholesaleMinQty != null && quantity >= product.wholesaleMinQty) {
+    return product.wholesalePrice;
+  }
+  return product.promoPrice ?? product.originalPrice;
+}
+
+function deliveryLabel(value?: string) {
+  const labels: Record<string, string> = {
+    within_1_hour: "Within 1 hour",
+    same_day: "Same day",
+    one_day: "1 day",
+    two_days: "2 days",
+    accra_same_day: "Accra: same day",
+    outside_accra_2_3_days: "Outside Accra: 2-3 days",
+    arranged_with_buyer: "Arranged with buyer",
+  };
+  return value ? labels[value] ?? value : undefined;
+}
 
 function CartItemRow({ item, onRemove }: { item: CartItem; onRemove: () => void }) {
   const updateQty = useMutation(api.cart.updateCartItemQty);
@@ -48,8 +72,10 @@ function CartItemRow({ item, onRemove }: { item: CartItem; onRemove: () => void 
   if (!item.product) return null;
 
   const product = item.product;
-  const price = product.promoPrice ?? product.originalPrice;
+  const price = getUnitPrice(product, item.quantity);
   const subtotal = price * item.quantity;
+  const retailPrice = product.promoPrice ?? product.originalPrice;
+  const usingWholesale = product.wholesalePrice != null && product.wholesaleMinQty != null && item.quantity >= product.wholesaleMinQty;
 
   const handleQty = async (newQty: number) => {
     setLoading(true);
@@ -99,10 +125,16 @@ function CartItemRow({ item, onRemove }: { item: CartItem; onRemove: () => void 
         </Link>
         <div className="flex items-center gap-2 mt-1">
           <span className="text-primary font-semibold text-sm">{formatCurrency(price)}</span>
-          {product.promoPrice && (
-            <span className="text-xs text-muted-foreground line-through">{formatCurrency(product.originalPrice)}</span>
+          {(product.promoPrice || usingWholesale) && (
+            <span className="text-xs text-muted-foreground line-through">{formatCurrency(retailPrice === price ? product.originalPrice : retailPrice)}</span>
           )}
         </div>
+        {usingWholesale && (
+          <p className="text-[11px] text-emerald-500 mt-0.5">Wholesale rate applied for {product.wholesaleMinQty}+ units.</p>
+        )}
+        {deliveryLabel(product.deliveryPeriod) && (
+          <p className="text-[11px] text-muted-foreground mt-0.5">Delivery: {deliveryLabel(product.deliveryPeriod)}{product.deliveryNotes ? ` - ${product.deliveryNotes}` : ""}</p>
+        )}
 
         {/* Qty controls */}
         <div className="flex items-center gap-2 mt-3">
@@ -158,8 +190,6 @@ function CheckoutDialog({
   const [note, setNote] = useState("");
   const [receiptEmail, setReceiptEmail] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("mobile_money");
-  const [paymentNetwork, setPaymentNetwork] = useState("mtn");
-  const [paymentAccount, setPaymentAccount] = useState("");
   const [loading, setLoading] = useState(false);
 
   // Determine effective payment mode per item (default: online/momo).
@@ -190,7 +220,7 @@ function CheckoutDialog({
   const dueNow = items.reduce((sum, i) => {
     const p = i.product;
     if (!p) return sum;
-    const price = (p.promoPrice ?? p.originalPrice) * i.quantity;
+    const price = getUnitPrice(p, i.quantity) * i.quantity;
     const m = modeOf(p);
     if (m === "momo") return sum + price;
     if (m === "partial") {
@@ -208,8 +238,6 @@ function CheckoutDialog({
         buyerPhone: phone || undefined,
         buyerNote: note || undefined,
         paymentMethod,
-        paymentNetwork: paymentMethod === "mobile_money" ? paymentNetwork : undefined,
-        paymentAccount: paymentMethod === "mobile_money" ? paymentAccount || phone || undefined : undefined,
         receiptEmail: receiptEmail || undefined,
       });
       if (result.paymentPending) {
@@ -266,7 +294,7 @@ function CheckoutDialog({
                 const p = i.product;
                 if (!p) return null;
                 const m = modeOf(p);
-                const price = (p.promoPrice ?? p.originalPrice) * i.quantity;
+                const price = getUnitPrice(p, i.quantity) * i.quantity;
                 const accepted = p.paymentOptions?.acceptedModes ?? [m === "partial" ? "momo" : m];
                 const label =
                   m === "cod" ? "Cash on delivery"
@@ -285,7 +313,7 @@ function CheckoutDialog({
             </div>
             {hasOnline && (
               <p className="text-xs text-muted-foreground">
-                Due online now: <span className="text-primary font-semibold">{formatCurrency(dueNow)}</span>
+                Due to seller now: <span className="text-primary font-semibold">{formatCurrency(dueNow)}</span>
                 {dueNow < total && <> · rest on delivery/arranged</>}
               </p>
             )}
@@ -312,30 +340,6 @@ function CheckoutDialog({
               ))}
             </div>
           </div>
-          )}
-          {hasOnline && paymentMethod === "mobile_money" && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Mobile Money Network</Label>
-                <select
-                  value={paymentNetwork}
-                  onChange={(e) => setPaymentNetwork(e.target.value)}
-                  className="h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
-                >
-                  <option value="mtn">MTN MoMo</option>
-                  <option value="telecel">Telecel Cash</option>
-                  <option value="airteltigo">AirtelTigo Money</option>
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>MoMo Number</Label>
-                <Input
-                  placeholder="e.g. +233 24 000 0000"
-                  value={paymentAccount}
-                  onChange={(e) => setPaymentAccount(e.target.value)}
-                />
-              </div>
-            </div>
           )}
           {hasOnline && ["mobile_money", "bank_transfer"].includes(paymentMethod) && (
             <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3 text-xs">
@@ -404,7 +408,7 @@ function CartPageInner() {
 
   const validItems = cartItems.filter((item) => item.product !== null);
   const subtotal = validItems.reduce((sum, item) => {
-    const price = item.product!.promoPrice ?? item.product!.originalPrice;
+    const price = getUnitPrice(item.product!, item.quantity);
     return sum + price * item.quantity;
   }, 0);
 

@@ -1,4 +1,5 @@
 import { useQuery } from "convex/react";
+import { useState } from "react";
 import { api } from "../../../../../convex/_generated/api.js";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -10,7 +11,16 @@ import { formatCurrency } from "@/lib/utils.ts";
 import { Link } from "react-router-dom";
 
 export default function AnalyticsTab() {
-  const analytics = useQuery((api.analytics as any).getSellerAnalytics, {}) as any;
+  const [range, setRange] = useState("336");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
+  const analyticsArgs = range === "custom"
+    ? {
+        from: customFrom ? new Date(customFrom).getTime() : undefined,
+        to: customTo ? new Date(customTo).getTime() + 24 * 60 * 60 * 1000 - 1 : undefined,
+      }
+    : { rangeHours: Number(range) };
+  const analytics = useQuery((api.analytics as any).getSellerAnalytics, analyticsArgs) as any;
   const topProducts = useQuery((api.analytics as any).getTopProducts, {}) as any[] | undefined;
   const insights = useQuery((api.analytics as any).getSellerInsights, {}) as any;
 
@@ -84,10 +94,32 @@ export default function AnalyticsTab() {
 
       {/* Views over time */}
       <Card>
-        <CardHeader>
+        <CardHeader className="gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle className="text-base flex items-center gap-2">
-            <BarChart3 className="size-4 text-primary" /> Product views — last 14 days
+            <BarChart3 className="size-4 text-primary" /> Product views
           </CardTitle>
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              value={range}
+              onChange={(event) => setRange(event.target.value)}
+              className="h-9 rounded-md border border-input bg-background px-3 text-xs"
+            >
+              <option value="12">Last 12 hours</option>
+              <option value="24">Last 24 hours</option>
+              <option value="72">Last 3 days</option>
+              <option value="336">Last 14 days</option>
+              <option value="720">Last 30 days</option>
+              <option value="8760">Last 1 year</option>
+              <option value="26280">Last 3 years</option>
+              <option value="custom">Custom</option>
+            </select>
+            {range === "custom" && (
+              <>
+                <input type="date" value={customFrom} onChange={(event) => setCustomFrom(event.target.value)} className="h-9 rounded-md border border-input bg-background px-3 text-xs" />
+                <input type="date" value={customTo} onChange={(event) => setCustomTo(event.target.value)} className="h-9 rounded-md border border-input bg-background px-3 text-xs" />
+              </>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="flex items-end gap-1.5 h-40">

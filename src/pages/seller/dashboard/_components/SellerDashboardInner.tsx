@@ -58,6 +58,19 @@ function StockBadge({ stock, threshold }: { stock: number; threshold: number }) 
   return <Badge variant="secondary" className="text-[10px]">{stock} in stock</Badge>;
 }
 
+function deliveryLabel(value?: string) {
+  const labels: Record<string, string> = {
+    within_1_hour: "Within 1 hour",
+    same_day: "Same day",
+    one_day: "1 day",
+    two_days: "2 days",
+    accra_same_day: "Accra: same day",
+    outside_accra_2_3_days: "Outside Accra: 2-3 days",
+    arranged_with_buyer: "Arranged with buyer",
+  };
+  return value ? labels[value] ?? value : undefined;
+}
+
 // ── History tab: every sale + account action, for future reference ──
 function HistoryTab({ orders, activity }: { orders: any[] | undefined; activity: any[] | undefined }) {
   const [view, setView] = useState<"sales" | "activity">("sales");
@@ -80,10 +93,10 @@ function HistoryTab({ orders, activity }: { orders: any[] | undefined; activity:
   return (
     <div className="space-y-5">
       {/* Summary */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <Card><CardContent className="p-4"><p className="text-[11px] text-muted-foreground uppercase tracking-wider">Total sales</p><p className="text-2xl font-light mt-1">{orders.filter((o) => o.status !== "cancelled").length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-[11px] text-muted-foreground uppercase tracking-wider">Units sold</p><p className="text-2xl font-light mt-1">{totalUnits}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-[11px] text-muted-foreground uppercase tracking-wider">Revenue</p><p className="text-2xl font-light mt-1 text-primary">{formatCurrency(totalRevenue)}</p></CardContent></Card>
+        <Card><CardContent className="p-4 min-w-0"><p className="text-[11px] text-muted-foreground uppercase tracking-wider">Revenue</p><p className="break-words text-xl font-light mt-1 text-primary sm:text-2xl">{formatCurrency(totalRevenue)}</p></CardContent></Card>
       </div>
 
       <div className="flex gap-2">
@@ -103,7 +116,7 @@ function HistoryTab({ orders, activity }: { orders: any[] | undefined; activity:
         ) : (
           <div className="space-y-2">
             {orders.map((o: any) => (
-              <div key={o._id} className="flex items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
+              <div key={o._id} className="flex flex-col gap-3 rounded-lg border border-border bg-card px-4 py-3 sm:flex-row sm:items-center">
                 <div className="size-11 rounded-md overflow-hidden bg-muted shrink-0">
                   {o.product?.images?.[0] ? <img src={o.product.images[0]} alt="" className="w-full h-full object-cover" /> : <Package className="m-2.5 size-5 text-muted-foreground/40" />}
                 </div>
@@ -113,7 +126,7 @@ function HistoryTab({ orders, activity }: { orders: any[] | undefined; activity:
                     {o.quantity ?? 1} unit{(o.quantity ?? 1) !== 1 ? "s" : ""} · {o.buyerName} · {formatDistanceToNow(o._creationTime, { addSuffix: true })}
                   </p>
                 </div>
-                <div className="text-right shrink-0">
+                <div className="min-w-0 shrink-0 text-left sm:text-right">
                   <p className="text-sm font-semibold text-primary">{formatCurrency(o.totalAmount ?? 0)}</p>
                   <Badge variant="secondary" className="text-[9px] capitalize">{o.status}</Badge>
                 </div>
@@ -216,6 +229,9 @@ function ProductCard({
       <CardContent className="p-3">
         <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{product.brand}</p>
         <p className="text-sm font-medium mt-0.5 truncate">{product.name}</p>
+        {deliveryLabel((product as any).deliveryPeriod) && (
+          <p className="mt-0.5 truncate text-[10px] text-muted-foreground">Delivery: {deliveryLabel((product as any).deliveryPeriod)}</p>
+        )}
         <div className="flex items-center gap-2 mt-1.5">
           <span className="text-sm font-bold text-primary">{formatCurrency(activePrice)}</span>
           {product.promoPrice && (
@@ -250,13 +266,16 @@ function SellerOrdersTab({ onContactBuyer }: { onContactBuyer: (buyerId: Id<"use
   const updateOrderStatus = ((api.orders as any).updateOrderStatus || (api.products as any).listAll) as any;
   const markBalanceCollected = ((api.orders as any).markBalanceCollected || (api.products as any).listAll) as any;
   const markPaymentReceivedEndpoint = ((api.orders as any).markPaymentReceived || (api.products as any).listAll) as any;
+  const resendRecentBuyerOrderUpdatesEndpoint = ((api.orders as any).resendRecentBuyerOrderUpdates || (api.products as any).listAll) as any;
 
   const orders = useQuery(getSellerOrders, {});
   const updateStatus = useMutation(updateOrderStatus) as any;
   const collectBalance = useMutation(markBalanceCollected) as any;
   const markPaymentReceived = useMutation(markPaymentReceivedEndpoint) as any;
+  const resendRecentBuyerOrderUpdates = useMutation(resendRecentBuyerOrderUpdatesEndpoint) as any;
   const [updating, setUpdating] = useState<string | null>(null);
   const [collecting, setCollecting] = useState<string | null>(null);
+  const [resending, setResending] = useState(false);
 
   const handleCollectBalance = async (orderId: string) => {
     setCollecting(orderId);
@@ -297,6 +316,19 @@ function SellerOrdersTab({ onContactBuyer }: { onContactBuyer: (buyerId: Id<"use
     }
   };
 
+  const handleResendRecent = async () => {
+    setResending(true);
+    try {
+      const result = await resendRecentBuyerOrderUpdates({ hours: 72 });
+      toast.success(`Resent buyer updates for ${result.sent ?? 0} recent order${result.sent === 1 ? "" : "s"}`);
+    } catch (e) {
+      const msg = e instanceof ConvexError ? (e.data as { message: string }).message : "Failed to resend buyer updates";
+      toast.error(msg);
+    } finally {
+      setResending(false);
+    }
+  };
+
   if (orders === undefined) {
     return (
       <div className="space-y-4">
@@ -321,14 +353,20 @@ function SellerOrdersTab({ onContactBuyer }: { onContactBuyer: (buyerId: Id<"use
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-muted-foreground">{orders.length} order{orders.length !== 1 ? "s" : ""} total</p>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p className="text-sm text-muted-foreground">{orders.length} order{orders.length !== 1 ? "s" : ""} total</p>
+        <Button type="button" variant="outline" size="sm" onClick={handleResendRecent} disabled={resending} className="gap-2">
+          {resending ? <Loader2 className="size-3.5 animate-spin" /> : <Send className="size-3.5" />}
+          Resend recent buyer updates
+        </Button>
+      </div>
       {orders.map((order: any) => {
         const cfg = ORDER_STATUSES[order.status as SellerOrderStatus] || ORDER_STATUSES.pending;
         const Icon = cfg.icon;
         return (
           <Card key={order._id}>
             <CardContent className="p-5">
-              <div className="flex gap-4">
+              <div className="flex flex-col gap-4 sm:flex-row">
                 <div className="size-14 rounded-lg overflow-hidden bg-muted shrink-0">
                   {order.product?.images?.[0] ? (
                     <img src={order.product.images[0]} alt={order.product.name} className="w-full h-full object-cover" />
@@ -339,8 +377,8 @@ function SellerOrdersTab({ onContactBuyer }: { onContactBuyer: (buyerId: Id<"use
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="min-w-0">
                       <p className="text-sm font-medium truncate">{order.product?.name ?? "Deleted product"}</p>
                       <p className="text-xs text-muted-foreground">
                         Buyer: {order.buyerName} · Qty: {order.quantity} × {formatCurrency(order.priceAtPurchase)}
@@ -372,9 +410,9 @@ function SellerOrdersTab({ onContactBuyer }: { onContactBuyer: (buyerId: Id<"use
                         <p className="text-xs text-muted-foreground italic mt-1">"{order.buyerNote}"</p>
                       )}
                     </div>
-                    <p className="text-primary font-semibold shrink-0">{formatCurrency(order.totalAmount)}</p>
+                    <p className="break-words text-primary font-semibold sm:shrink-0">{formatCurrency(order.totalAmount)}</p>
                   </div>
-                  <div className="flex items-center gap-3 mt-3">
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
                     <Badge className={`text-xs flex items-center gap-1 border ${cfg.color}`}>
                       <Icon className="size-3" /> {cfg.label}
                     </Badge>
@@ -384,7 +422,7 @@ function SellerOrdersTab({ onContactBuyer }: { onContactBuyer: (buyerId: Id<"use
                         onValueChange={(val) => handleStatusChange(order._id, val as SellerOrderStatus)}
                         disabled={updating === order._id}
                       >
-                        <SelectTrigger className="h-7 text-xs w-36">
+                        <SelectTrigger className="h-8 text-xs w-full min-w-36 sm:w-36">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -401,21 +439,21 @@ function SellerOrdersTab({ onContactBuyer }: { onContactBuyer: (buyerId: Id<"use
                       <Button
                         type="button"
                         size="sm"
-                        className="h-7 gap-1.5 text-xs"
+                        className="h-8 gap-1.5 text-xs"
                         disabled={collecting === order._id}
                         onClick={() => handlePaymentReceived(order._id)}
                       >
                         <CheckCircle className="size-3" /> Payment Received
                       </Button>
                     )}
-                    <Button type="button" variant="outline" size="sm" className="h-7 gap-1.5 text-xs" onClick={() => onContactBuyer(order.buyerId)}>
+                    <Button type="button" variant="outline" size="sm" className="h-8 gap-1.5 text-xs" onClick={() => onContactBuyer(order.buyerId)}>
                       <MessageSquare className="size-3" /> Contact buyer
                     </Button>
                     {order.depositPaid && !order.balancePaid && order.balanceAmount != null && order.balanceAmount > 0 && (
                       <Button
                         type="button"
                         size="sm"
-                        className="h-7 gap-1.5 text-xs"
+                        className="h-8 gap-1.5 text-xs"
                         disabled={collecting === order._id}
                         onClick={() => handleCollectBalance(order._id)}
                       >
@@ -463,6 +501,18 @@ function PaymentSettingsTab({
   const save = async () => {
     setSaving(true);
     try {
+      const numberDigits = momoNumber.replace(/[^\d]/g, "");
+      const localMomo = numberDigits.startsWith("233") ? `0${numberDigits.slice(3)}` : numberDigits;
+      const prefix = localMomo.slice(0, 3);
+      const prefixes: Record<string, string[]> = {
+        mtn: ["024", "059", "053", "025", "055"],
+        airteltigo: ["027", "023", "057"],
+        telecel: ["020", "050"],
+      };
+      if (acceptMomo && !prefixes[momoNetwork]?.includes(prefix)) {
+        toast.error("The MoMo number prefix does not match the selected network.");
+        return;
+      }
       await onSave({
         phone: phone.trim() || undefined,
         paymentMethod: acceptMomo ? "mobile_money" : acceptBank ? "bank_transfer" : "cash_on_delivery",
@@ -729,6 +779,9 @@ export default function SellerDashboardInner() {
         <Button size="lg" onClick={handleBecomeSeller} className="rounded-full px-10">
           Activate Seller Account
         </Button>
+        <Button asChild variant="outline" className="rounded-full px-8">
+          <Link to="/">Back to Home</Link>
+        </Button>
         <VendorSubscriptionDialog
           open={subscriptionOpen}
           onOpenChange={setSubscriptionOpen}
@@ -815,7 +868,7 @@ export default function SellerDashboardInner() {
 
       {/* Tabs: Products / Inventory & Revenue */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="min-w-0">
-        <TabsList className="mb-6 w-full sm:w-fit">
+        <TabsList className="mb-6 w-full justify-start overflow-x-auto sm:w-fit">
           <TabsTrigger value="products" className="gap-2 cursor-pointer">
             <Package className="size-3.5" /> Products
           </TabsTrigger>

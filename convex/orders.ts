@@ -2,6 +2,72 @@ import { ConvexError, v } from "convex/values";
 import { mutation, query } from "./_generated/server";
 import { internal } from "./_generated/api";
 
+async function resolveMediaUrl(ctx: any, value: string | undefined | null): Promise<string> {
+  if (!value) return "";
+  if (value.startsWith("http://") || value.startsWith("https://")) return value;
+  try {
+    return (await ctx.storage.getUrl(value as any)) ?? value;
+  } catch {
+    return value;
+  }
+}
+
+async function enrichOrderProduct(ctx: any, product: any) {
+  if (!product) return product;
+  const images = await Promise.all((product.images ?? []).map((media: string) => resolveMediaUrl(ctx, media)));
+  const videos = await Promise.all((product.videos ?? []).map((media: string) => resolveMediaUrl(ctx, media)));
+  return {
+    ...product,
+    images,
+    videos,
+    imageUrl: product.imageUrl ? await resolveMediaUrl(ctx, product.imageUrl) : (images[0] ?? ""),
+  };
+}
+
+function formatGhs(n: number) {
+  return `GHS ${Number(n || 0).toFixed(2)}`;
+}
+
+function orderReference(order: any) {
+  return String(order.paymentReference ?? order._id);
+}
+
+async function notifyBuyerBySmsAndEmail(ctx: any, order: any, product: any, buyer: any, title: string, message: string) {
+  const phone = order.buyerPhone ?? buyer?.phone;
+  const email = order.receiptEmail ?? buyer?.email;
+  const buyerName = buyer?.name ?? "Customer";
+  if (phone) {
+    await ctx.scheduler.runAfter(0, internal.sms.sendSMS, {
+      to: phone,
+      message,
+    });
+  }
+  if (email) {
+    await ctx.scheduler.runAfter(0, internal.mail.sendEmail, {
+      to: email,
+      subject: title,
+      heading: title,
+      bodyLines: [
+        `Hi ${buyerName},`,
+        message,
+        `Reference: ${orderReference(order)}`,
+        `Item: ${product?.name ?? "Your order"}`,
+      ],
+      ctaText: "View Order",
+      ctaUrl: "https://aurriq.doabookpro.com/orders",
+    });
+  }
+}
+
+function statusMessage(status: string, productName: string, reference: string) {
+  const item = productName || "your order";
+  if (status === "confirmed") return `AURRIQ: ${item} is confirmed. Ref ${reference}. The seller is preparing it for delivery or pickup.`;
+  if (status === "shipped") return `AURRIQ: ${item} has been shipped. Ref ${reference}. Please keep your phone available for delivery updates.`;
+  if (status === "delivered") return `AURRIQ: ${item} has been marked delivered. Ref ${reference}. Thank you for shopping with Aurriq.`;
+  if (status === "cancelled") return `AURRIQ: ${item} has been cancelled. Ref ${reference}. Contact Aurriq support if you need help.`;
+  return `AURRIQ: ${item} is now ${status}. Ref ${reference}.`;
+}
+
 function assertSellerDashboardAccess(user: any) {
   if (user.marketplaceSubscriptionStatus === "locked" || (typeof user.marketplacePaidUntil === "number" && user.marketplacePaidUntil < Date.now())) {
     throw new ConvexError({ code: "FORBIDDEN", message: "Your seller dashboard is locked because your Aurriq subscription has expired. Renew your plan to continue managing orders." });
@@ -68,8 +134,8 @@ export const placeOrder = mutation({
     const isManualReceiptPayment = anyOnline && ["mobile_money", "bank_transfer"].includes(args.paymentMethod ?? "");
     const paymentReference = isManualReceiptPayment ? `AURRIQ-${Date.now()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}` : undefined;
 
-    if (isManualReceiptPayment && !(args.paymentAccount || args.buyerPhone)) {
-      throw new ConvexError({ code: "BAD_REQUEST", message: "Provide your payment reference or phone number so the seller can match your payment" });
+    if (isManualReceiptPayment && !args.buyerPhone) {
+      throw new ConvexError({ code: "BAD_REQUEST", message: "Provide your SMS receipt phone number so the seller can confirm and update you" });
     }
 
     const orderIds: string[] = [];
@@ -137,8 +203,8 @@ export const placeOrder = mutation({
         buyerPhone: args.buyerPhone,
         buyerNote: args.buyerNote,
         paymentMethod: mode === "cod" ? "cash_on_delivery" : mode === "negotiable" ? "negotiable" : args.paymentMethod,
-        paymentNetwork: itemOnline ? args.paymentNetwork : undefined,
-        paymentAccount: itemOnline ? args.paymentAccount : undefined,
+        paymentNetwork: undefined,
+        paymentAccount: undefined,
         paymentReference: itemOnline ? paymentReference : undefined,
         paymentStatus: itemOnline ? "initiated" : "not_required",
         sellerPaymentInstructions: itemOnline ? sellerPaymentInstructions : undefined,
@@ -202,7 +268,7 @@ export const getMyOrders = query({
 
     return await Promise.all(
       orders.map(async (order) => {
-        const product = await ctx.db.get(order.productId);
+        const product = await enrichOrderProduct(ctx, await ctx.db.get(order.productId));
         const seller = await ctx.db.get(order.sellerId);
         return { ...order, product, sellerName: seller?.name ?? "Unknown Seller" };
       })
@@ -230,7 +296,7 @@ export const getSellerOrders = query({
 
     return await Promise.all(
       orders.map(async (order) => {
-        const product = await ctx.db.get(order.productId);
+        const product = await enrichOrderProduct(ctx, await ctx.db.get(order.productId));
         const buyer = await ctx.db.get(order.buyerId);
         return { ...order, product, buyerName: buyer?.name ?? "Unknown Buyer" };
       })
@@ -274,11 +340,15 @@ export const updateOrderStatus = mutation({
     });
 
     // Notify the buyer of the status change.
+    const buyer = await ctx.db.get(order.buyerId);
+    const title = `Order ${args.status.replace(/_/g, " ")}`;
+    const message = statusMessage(args.status, product?.name ?? "Your order", orderReference(order));
+    await notifyBuyerBySmsAndEmail(ctx, order, product, buyer, title, message);
     await ctx.runMutation(internal.notifications.createNotification, {
       userId: order.buyerId,
       type: "order_status",
-      title: `Order ${args.status}`,
-      body: `${product?.name ?? "Your order"} is now ${args.status}.`,
+      title,
+      body: message,
       link: "/orders",
     });
   },
@@ -336,11 +406,14 @@ export const markPaymentReceived = mutation({
     await ctx.scheduler.runAfter(0, (internal as any).receipts.sendOrderReceipt, {
       orderId: args.orderId,
     });
+    const buyer = await ctx.db.get(order.buyerId);
+    const paymentMessage = `AURRIQ: Payment received for ${product.name ?? "your order"} (${formatGhs(revenue)}). Ref ${orderReference(order)}. Your item is being prepared for delivery or pickup.`;
+    await notifyBuyerBySmsAndEmail(ctx, order, product, buyer, "Payment received", paymentMessage);
     await ctx.runMutation(internal.notifications.createNotification, {
       userId: order.buyerId,
       type: "payment",
       title: "Payment received",
-      body: `${product.name ?? "Your item"} payment has been received. Your item is being prepared for delivery or pickup.`,
+      body: paymentMessage,
       link: "/orders",
     });
     await ctx.runMutation(internal.notifications.logActivity, {
@@ -375,6 +448,15 @@ export const markBalanceCollected = mutation({
     });
 
     const product = await ctx.db.get(order.productId);
+    const buyer = await ctx.db.get(order.buyerId);
+    await notifyBuyerBySmsAndEmail(
+      ctx,
+      order,
+      product,
+      buyer,
+      "Order fully paid",
+      `AURRIQ: Balance collected for ${product?.name ?? "your order"}. Ref ${orderReference(order)}. Your order is now fully settled. Thank you for shopping with Aurriq.`
+    );
 
     // Audit trail for the seller.
     await ctx.runMutation(internal.notifications.logActivity, {
@@ -391,5 +473,44 @@ export const markBalanceCollected = mutation({
       body: `Your balance for ${product?.name ?? "your order"} was collected on delivery. Enjoy!`,
       link: "/orders",
     });
+  },
+});
+
+export const resendRecentBuyerOrderUpdates = mutation({
+  args: { hours: v.optional(v.number()) },
+  handler: async (ctx, args) => {
+    const identity = await ctx.auth.getUserIdentity();
+    if (!identity) throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not logged in" });
+
+    const user = await ctx.db
+      .query("users")
+      .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
+      .unique();
+    if (!user) throw new ConvexError({ code: "NOT_FOUND", message: "User not found" });
+    assertSellerDashboardAccess(user);
+
+    const since = Date.now() - Math.max(1, Math.min(args.hours ?? 72, 720)) * 60 * 60 * 1000;
+    const orders = await ctx.db
+      .query("orders")
+      .withIndex("by_seller", (q) => q.eq("sellerId", user._id))
+      .collect();
+
+    let sent = 0;
+    for (const order of orders.filter((order) => order._creationTime >= since)) {
+      const product = await ctx.db.get(order.productId);
+      const buyer = await ctx.db.get(order.buyerId);
+      if (!(order.buyerPhone ?? buyer?.phone) && !(order.receiptEmail ?? buyer?.email)) continue;
+
+      const reference = orderReference(order);
+      const productName = product?.name ?? "your order";
+      const title = order.paymentStatus === "paid" ? "Payment received" : `Order ${String(order.status).replace(/_/g, " ")}`;
+      const message = order.paymentStatus === "paid"
+        ? `AURRIQ: Payment received for ${productName}. Ref ${reference}. Current status: ${String(order.status).replace(/_/g, " ")}.`
+        : statusMessage(String(order.status), productName, reference);
+      await notifyBuyerBySmsAndEmail(ctx, order, product, buyer, title, message);
+      sent++;
+    }
+
+    return { sent };
   },
 });

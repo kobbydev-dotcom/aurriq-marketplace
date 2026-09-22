@@ -75,7 +75,12 @@ export default function SellerMessagesTab({
           </div>
         )}
       </div>
-      {selectedId ? <SellerMessageThread otherUserId={selectedId} /> : (
+      {selectedId ? (
+        <SellerMessageThread
+          otherUserId={selectedId}
+          otherUserName={inbox.find((conversation: Conversation) => conversation.otherUserId === selectedId)?.otherUserName}
+        />
+      ) : (
         <div className="flex items-center justify-center p-8 text-center text-muted-foreground">
           <div><MessageSquare className="mx-auto mb-2 size-8 opacity-40" /><p className="text-sm">Select a conversation to reply</p></div>
         </div>
@@ -84,9 +89,8 @@ export default function SellerMessagesTab({
   );
 }
 
-function SellerMessageThread({ otherUserId }: { otherUserId: Id<"users"> }) {
+function SellerMessageThread({ otherUserId, otherUserName }: { otherUserId: Id<"users">; otherUserName?: string }) {
   const messages = useQuery(api.messages.getConversation, { otherUserId });
-  const otherUser = useQuery(api.users.current, { userId: otherUserId } as any) as { name?: string } | null | undefined;
   const markRead = useMutation(api.messages.markConversationAsRead);
   const sendMessage = useMutation(api.messages.sendMessage);
   const [text, setText] = useState("");
@@ -116,7 +120,7 @@ function SellerMessageThread({ otherUserId }: { otherUserId: Id<"users"> }) {
     <div className="flex min-h-[520px] flex-col">
       <div className="flex items-center gap-3 border-b border-border/60 p-4">
         <MessageSquare className="size-4 text-primary" />
-        <div><p className="text-sm font-medium">{otherUser?.name ?? "Buyer"}</p><p className="text-xs text-muted-foreground">Private Aurriq conversation</p></div>
+        <div><p className="text-sm font-medium">{otherUserName ?? "Buyer"}</p><p className="text-xs text-muted-foreground">Private Aurriq conversation</p></div>
       </div>
       <div className="flex-1 space-y-3 overflow-y-auto p-4">
         {messages.length === 0 && <p className="py-12 text-center text-sm text-muted-foreground">Start a conversation with this buyer.</p>}

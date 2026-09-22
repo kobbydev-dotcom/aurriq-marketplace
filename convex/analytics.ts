@@ -21,6 +21,15 @@ export const trackEvent = mutation({
   },
   handler: async (ctx, args) => {
     const me = await getCurrentUser(ctx);
+    if (args.kind === "product_view" && me?._id && args.productId) {
+      const existing = await ctx.db
+        .query("analyticsEvents")
+        .withIndex("by_actor", (q) => q.eq("actorId", me._id))
+        .collect();
+      if (existing.some((event) => event.kind === "product_view" && event.productId === args.productId)) {
+        return true;
+      }
+    }
     await ctx.db.insert("analyticsEvents", {
       subjectType: args.subjectType,
       subjectId: args.subjectId,
@@ -69,8 +78,12 @@ export const getProductViewCount = query({
 
 // Aggregated analytics for the current seller's dashboard.
 export const getSellerAnalytics = query({
-  args: {},
-  handler: async (ctx) => {
+  args: {
+    rangeHours: v.optional(v.number()),
+    from: v.optional(v.number()),
+    to: v.optional(v.number()),
+  },
+  handler: async (ctx, args) => {
     const me = await getCurrentUser(ctx);
     if (!me) return null;
 
@@ -102,15 +115,22 @@ export const getSellerAnalytics = query({
       byProduct.set(String(e.productId), (byProduct.get(String(e.productId)) ?? 0) + 1);
     }
 
-    // Views over the last 14 days
     const now = Date.now();
+    const rangeStart = typeof args.from === "number" ? args.from : now - (args.rangeHours ?? 24 * 14) * 60 * 60 * 1000;
+    const rangeEnd = typeof args.to === "number" ? args.to : now;
+    const rangedProductViews = productViews.filter((e) => e._creationTime >= rangeStart && e._creationTime <= rangeEnd);
     const dayMs = 24 * 60 * 60 * 1000;
+    const totalMs = Math.max(60 * 60 * 1000, rangeEnd - rangeStart);
+    const bucketCount = Math.min(30, Math.max(6, Math.ceil(totalMs / dayMs)));
+    const bucketMs = totalMs / bucketCount;
     const viewsSeries: { day: string; views: number }[] = [];
-    for (let i = 13; i >= 0; i--) {
-      const dayStart = now - i * dayMs;
-      const dayEnd = dayStart + dayMs;
-      const label = new Date(dayStart).toLocaleDateString(undefined, { month: "short", day: "numeric" });
-      const views = productViews.filter((e) => e._creationTime >= dayStart && e._creationTime < dayEnd).length;
+    for (let i = 0; i < bucketCount; i++) {
+      const dayStart = rangeStart + i * bucketMs;
+      const dayEnd = i === bucketCount - 1 ? rangeEnd + 1 : dayStart + bucketMs;
+      const label = totalMs <= dayMs
+        ? new Date(dayStart).toLocaleTimeString(undefined, { hour: "numeric" })
+        : new Date(dayStart).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+      const views = rangedProductViews.filter((e) => e._creationTime >= dayStart && e._creationTime < dayEnd).length;
       viewsSeries.push({ day: label, views });
     }
 
