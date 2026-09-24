@@ -184,6 +184,19 @@ export const getSavedSuppliers = query({
 });
 
 // Products from sellers the current user follows (their "Following" feed).
+// Turn a stored file id into a real web link (leave real links untouched).
+async function resolveMediaUrl(ctx: any, value: any) {
+  if (!value) return undefined;
+  const s = String(value);
+  if (s.startsWith("http://") || s.startsWith("https://")) return s;
+  try {
+    return (await ctx.storage.getUrl(value as any)) ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+// Products from sellers the current user follows (their "Following" feed).
 export const getFollowedProducts = query({
   args: {},
   handler: async (ctx) => {
@@ -192,21 +205,27 @@ export const getFollowedProducts = query({
     const follows = await ctx.db
       .query("follows")
       .withIndex("by_follower", (q) => q.eq("followerId", me._id))
-      .collect();
-    const sellerIds = new Set(follows.map((f) => f.followeeId));
+      .take(200);
+    const sellerIds = new Set(follows.map((f) => String(f.followeeId)));
     if (sellerIds.size === 0) return [];
 
     const products = await ctx.db.query("products").collect();
     const feed = products
-      .filter((p: any) => p.isActive && sellerIds.has(p.sellerId))
+      .filter((p: any) => p.isActive && sellerIds.has(String(p.sellerId)))
       .sort((a: any, b: any) => b._creationTime - a._creationTime)
       .slice(0, 40);
 
     return await Promise.all(
       feed.map(async (p: any) => {
         const seller: any = await ctx.db.get(p.sellerId);
+        const images = (await Promise.all((p.images ?? []).map((i: any) => resolveMediaUrl(ctx, i)))).filter(Boolean);
+        const videos = (await Promise.all((p.videos ?? []).map((i: any) => resolveMediaUrl(ctx, i)))).filter(Boolean);
+        const imageUrl = await resolveMediaUrl(ctx, p.imageUrl);
         return {
           ...p,
+          images,
+          videos,
+          imageUrl,
           sellerName: seller?.name ?? "Aurriq Seller",
           sellerBusinessType: seller?.businessType,
         };

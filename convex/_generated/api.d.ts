@@ -11,8 +11,10 @@
 import type * as accountDeletion from "../accountDeletion.js";
 import type * as admin from "../admin.js";
 import type * as analytics from "../analytics.js";
+import type * as aurriqHistory from "../aurriqHistory.js";
 import type * as auth from "../auth.js";
 import type * as cart from "../cart.js";
+import type * as crons from "../crons.js";
 import type * as follows from "../follows.js";
 import type * as http from "../http.js";
 import type * as inventory from "../inventory.js";
@@ -26,6 +28,7 @@ import type * as platform from "../platform.js";
 import type * as products from "../products.js";
 import type * as receipts from "../receipts.js";
 import type * as reports from "../reports.js";
+import type * as retention from "../retention.js";
 import type * as reviews from "../reviews.js";
 import type * as rfq from "../rfq.js";
 import type * as seed from "../seed.js";
@@ -43,8 +46,10 @@ declare const fullApi: ApiFromModules<{
   accountDeletion: typeof accountDeletion;
   admin: typeof admin;
   analytics: typeof analytics;
+  aurriqHistory: typeof aurriqHistory;
   auth: typeof auth;
   cart: typeof cart;
+  crons: typeof crons;
   follows: typeof follows;
   http: typeof http;
   inventory: typeof inventory;
@@ -58,6 +63,7 @@ declare const fullApi: ApiFromModules<{
   products: typeof products;
   receipts: typeof receipts;
   reports: typeof reports;
+  retention: typeof retention;
   reviews: typeof reviews;
   rfq: typeof rfq;
   seed: typeof seed;

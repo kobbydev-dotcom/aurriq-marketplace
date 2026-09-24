@@ -1,16 +1,89 @@
+"use node";
+
 import { internalAction } from "./_generated/server";
 import { v } from "convex/values";
+import nodemailer from "nodemailer";
+
+function formatSender(value: string | undefined) {
+  const sender = value?.trim();
+  if (!sender) return "Aurriq <notifications@doabookpro.com>";
+  return sender.includes("<") ? sender : `Aurriq <${sender}>`;
+}
 
 async function sendSmtpEmail(args: { to: string; subject: string; html: string }) {
   const serviceUrl = process.env.AURRIQ_EMAIL_SERVICE_URL;
   const serviceSecret = process.env.AURRIQ_EMAIL_SERVICE_SECRET;
-  if (!serviceUrl || !serviceSecret) throw new Error("Aurriq email service is not configured");
-  const response = await fetch(`${serviceUrl.replace(/\/$/, "")}/api/email/send`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceSecret}` },
-    body: JSON.stringify(args),
-  });
-  if (!response.ok) throw new Error(`Aurriq email service failed: ${response.status}`);
+  if (serviceUrl && serviceSecret) {
+    const response = await fetch(`${serviceUrl.replace(/\/$/, "")}/api/email/send`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceSecret}` },
+      body: JSON.stringify(args),
+    });
+    if (response.ok) return;
+    const body = await response.text().catch(() => "");
+    throw new Error(`Aurriq email service failed: ${response.status} ${body}`);
+  }
+
+  const smtpHost = process.env.SMTP_SERVER ?? process.env.MAIL_SERVER;
+  const smtpPort = Number(process.env.SMTP_PORT ?? process.env.MAIL_PORT ?? 587);
+  const smtpUser = process.env.SMTP_USER ?? process.env.MAIL_USERNAME;
+  const smtpPass = process.env.SMTP_PASS ?? process.env.MAIL_PASSWORD;
+  const smtpFrom = formatSender(process.env.MAIL_DEFAULT_SENDER ?? smtpUser);
+
+  if (smtpHost && smtpUser && smtpPass) {
+    const transporter = nodemailer.createTransport({
+      host: smtpHost,
+      port: Number.isFinite(smtpPort) ? smtpPort : 587,
+      secure: smtpPort === 465,
+      requireTLS: smtpPort === 587,
+      auth: { user: smtpUser, pass: smtpPass },
+    });
+
+    await transporter.sendMail({
+      from: smtpFrom,
+      to: args.to,
+      subject: args.subject,
+      html: args.html,
+    });
+    return;
+  }
+
+  const resendApiKey = process.env.RESEND_API_KEY;
+  const sendgridApiKey = process.env.SENDGRID_API_KEY;
+  const from =
+    process.env.RESEND_FROM_EMAIL ??
+    process.env.SENDGRID_FROM_EMAIL ??
+    process.env.MAIL_DEFAULT_SENDER ??
+    "Aurriq <notifications@doabookpro.com>";
+
+  if (resendApiKey) {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${resendApiKey}` },
+      body: JSON.stringify({ from, to: args.to, subject: args.subject, html: args.html }),
+    });
+    if (response.ok) return;
+    const body = await response.text().catch(() => "");
+    throw new Error(`Resend email failed: ${response.status} ${body}`);
+  }
+
+  if (sendgridApiKey) {
+    const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${sendgridApiKey}` },
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: args.to }] }],
+        from: { email: from.includes("<") ? from.match(/<([^>]+)>/)?.[1] ?? from : from, name: "Aurriq" },
+        subject: args.subject,
+        content: [{ type: "text/html", value: args.html }],
+      }),
+    });
+    if (response.ok) return;
+    const body = await response.text().catch(() => "");
+    throw new Error(`SendGrid email failed: ${response.status} ${body}`);
+  }
+
+  throw new Error("Aurriq email is not configured. Set SMTP_SERVER/SMTP_USER/SMTP_PASS, AURRIQ_EMAIL_SERVICE_URL/SECRET, RESEND_API_KEY, or SENDGRID_API_KEY.");
 }
 
 export const sendEmail = internalAction({

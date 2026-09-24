@@ -84,8 +84,10 @@ function FollowingFeed() {
           return (
             <Link key={p._id} to={`/product/${p._id}`} className="group shrink-0 w-40">
               <div className="aspect-square rounded-xl overflow-hidden bg-muted border border-border mb-2">
-                {p.images?.[0] ? (
-                  <img src={p.images[0]} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                {p.images?.[0] || p.imageUrl ? (
+                  <img src={p.images?.[0] ?? p.imageUrl} alt={p.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
+                ) : p.videos?.[0] ? (
+                  <video src={p.videos[0]} muted playsInline preload="metadata" className="w-full h-full object-cover" />
                 ) : (
                   <div className="w-full h-full flex items-center justify-center"><Package className="size-8 text-muted-foreground/30" /></div>
                 )}

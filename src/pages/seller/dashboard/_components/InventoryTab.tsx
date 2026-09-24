@@ -229,12 +229,12 @@ export default function InventoryTab() {
           },
         ].map((s) => (
           <Card key={s.label} className={s.alert ? "border-amber-500/30" : ""}>
-            <CardContent className="p-4">
+            <CardContent className="min-w-0 p-4">
               <div className="flex items-center gap-2 mb-2">
                 <s.icon className={`size-4 ${s.color}`} />
                 <p className="text-xs text-muted-foreground">{s.label}</p>
               </div>
-              <p className={`text-2xl font-bold ${s.color}`}>{s.value}</p>
+              <p className={`break-words text-xl font-bold sm:text-2xl ${s.color}`}>{s.value}</p>
               <p className="text-[11px] text-muted-foreground mt-0.5">{s.sub}</p>
             </CardContent>
           </Card>
@@ -304,7 +304,7 @@ export default function InventoryTab() {
                       : ""
                 }>
                   <CardContent className="p-4">
-                    <div className="flex items-center gap-4">
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                       {/* Thumbnail */}
                       <div className="size-12 rounded-lg bg-muted overflow-hidden shrink-0">
                         {p.images[0] ? (
@@ -337,7 +337,7 @@ export default function InventoryTab() {
                         </div>
 
                         {/* Stock bar */}
-                        <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-1 text-xs">
+                        <div className="mt-2 grid grid-cols-1 gap-x-6 gap-y-2 text-xs sm:grid-cols-2 md:grid-cols-4">
                           <div>
                             <p className="text-muted-foreground">Stock</p>
                             <p className={`font-semibold ${p.stockStatus === "out" ? "text-destructive" : p.stockStatus === "low" ? "text-amber-400" : "text-foreground"}`}>
@@ -355,7 +355,7 @@ export default function InventoryTab() {
                           </div>
                           <div>
                             <p className="text-muted-foreground">Revenue Earned</p>
-                            <p className="font-semibold text-primary">{formatCurrency(p.totalRevenue)}</p>
+                            <p className="break-words font-semibold text-primary">{formatCurrency(p.totalRevenue)}</p>
                           </div>
                         </div>
                       </div>

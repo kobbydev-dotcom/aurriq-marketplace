@@ -3,10 +3,10 @@ import { v } from "convex/values";
 
 function normalizeGhanaPhone(value: string) {
   const digits = value.replace(/[^\d]/g, "");
-  if (digits.length === 10 && digits.startsWith("0")) return `233${digits.slice(1)}`;
-  if (digits.length === 12 && digits.startsWith("233")) return digits;
-  if (digits.length === 9) return `233${digits}`;
-  return digits;
+  if (digits.length === 10 && digits.startsWith("0")) return `+233${digits.slice(1)}`;
+  if (digits.length === 12 && digits.startsWith("233")) return `+${digits}`;
+  if (digits.length === 9) return `+233${digits}`;
+  return value.trim().startsWith("+") ? value.trim() : `+${digits}`;
 }
 
 export const sendSMS = internalAction({
@@ -15,12 +15,13 @@ export const sendSMS = internalAction({
     message: v.string(),
   },
   handler: async (_ctx, args) => {
-    const url = "https://sms-api.hubtel.com/v1/messages/send";
+    const url = "https://smsc.hubtel.com/v1/messages/send";
     
     // Accessing environment variables via process.env (now that @types/node is installed)
     const clientId = process.env.HUBTEL_CLIENT_ID;
     const clientSecret = process.env.HUBTEL_CLIENT_SECRET;
     const senderId = process.env.HUBTEL_SENDER_ID ?? "AURRIQ";
+    const fallbackSenderId = process.env.HUBTEL_FALLBACK_SENDER_ID ?? "DOABookPro";
 
     if (!clientId || !clientSecret) {
       throw new Error("Missing HUBTEL_CLIENT_ID or HUBTEL_CLIENT_SECRET");
@@ -28,18 +29,32 @@ export const sendSMS = internalAction({
 
     const authHeader = btoa(`${clientId}:${clientSecret}`);
 
-    const response = await fetch(url, {
+    const payload = {
+      From: senderId,
+      To: normalizeGhanaPhone(args.to),
+      Content: args.message,
+      RegisteredDelivery: true,
+    };
+
+    let response = await fetch(url, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Authorization": `Basic ${authHeader}`,
       },
-      body: JSON.stringify({
-        From: senderId,
-        To: normalizeGhanaPhone(args.to),
-        Content: args.message,
-      }),
+      body: JSON.stringify(payload),
     });
+
+    if (!response.ok && fallbackSenderId && fallbackSenderId !== senderId) {
+      response = await fetch(url, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Basic ${authHeader}`,
+        },
+        body: JSON.stringify({ ...payload, From: fallbackSenderId }),
+      });
+    }
 
     if (!response.ok) {
       const errorText = await response.text();

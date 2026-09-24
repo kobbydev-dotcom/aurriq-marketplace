@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.t
 import { Skeleton } from "@/components/ui/skeleton.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import {
-  Eye, Store, ShoppingBag, TrendingUp, Users, DollarSign, Percent, Package, BarChart3, Sparkles,
+  Eye, Store, ShoppingBag, TrendingUp, Users, Percent, Package, BarChart3, Sparkles,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils.ts";
 import { Link } from "react-router-dom";
@@ -44,7 +44,7 @@ export default function AnalyticsTab() {
     { label: "Shop visits", value: analytics.shopViews, icon: Store },
     { label: "Orders", value: analytics.ordersCount, icon: ShoppingBag },
     { label: "Followers", value: analytics.followers, icon: Users },
-    { label: "Revenue", value: formatCurrency(analytics.totalRevenue), icon: DollarSign },
+    { label: "Revenue", value: formatCurrency(analytics.totalRevenue), icon: TrendingUp },
     { label: "Units sold", value: analytics.totalUnits, icon: Package },
     { label: "Conversion", value: `${analytics.conversionRate}%`, icon: Percent },
     { label: "Avg order value", value: formatCurrency(analytics.avgOrderValue), icon: TrendingUp },
@@ -81,12 +81,12 @@ export default function AnalyticsTab() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {stats.map((s) => (
           <Card key={s.label}>
-            <CardContent className="p-4">
+            <CardContent className="min-w-0 p-4">
               <div className="flex items-center justify-between">
                 <p className="text-[11px] text-muted-foreground uppercase tracking-wider">{s.label}</p>
                 <s.icon className="size-4 text-primary" />
               </div>
-              <p className="text-2xl font-light mt-1">{s.value}</p>
+              <p className="break-words text-xl font-light mt-1 sm:text-2xl">{s.value}</p>
             </CardContent>
           </Card>
         ))}

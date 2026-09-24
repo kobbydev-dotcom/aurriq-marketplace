@@ -103,32 +103,36 @@ export const checkAndSendAlerts = internalMutation({
     const product = await ctx.db.get(args.productId);
     if (!product) return;
 
-    const seller = await ctx.db.get(product.sellerId);
+    const seller: any = await ctx.db.get(product.sellerId);
     const sellerPhone = seller?.phone;
-    if (!sellerPhone) return;
+    const sellerEmail = seller?.notifyEmail ?? seller?.email;
+    const threshold = product.lowStockThreshold > 0 ? product.lowStockThreshold : 5;
+    if (!sellerPhone && !sellerEmail) return;
+    const alert = async (message: string) => {
+      if (sellerPhone) await ctx.scheduler.runAfter(0, internal.sms.sendSMS, { to: sellerPhone, message });
+      if (sellerEmail) await ctx.scheduler.runAfter(0, internal.mail.sendEmail, {
+        to: sellerEmail, subject: "Aurriq stock alert", heading: "Stock alert",
+        bodyLines: [message], ctaText: "Open dashboard", ctaUrl: "https://aurriq.doabookpro.com/seller",
+      });
+    };
 
     if (product.stockQuantity === 0 && !product.outOfStockAlertSent) {
       await ctx.db.patch(args.productId, { outOfStockAlertSent: true });
-      await ctx.scheduler.runAfter(0, internal.sms.sendSMS, {
-        to: sellerPhone,
-        message: `AURRIQ STOCK ALERT: "${product.name}" is now OUT OF STOCK (0 units remaining). Update your listing to avoid missing sales.`,
-      });
+      await alert(`AURRIQ STOCK ALERT: "${product.name}" is now OUT OF STOCK (0 units remaining). Update your listing to avoid missing sales.`);
       return;
     }
 
     if (
       product.stockQuantity > 0 &&
-      product.stockQuantity <= product.lowStockThreshold &&
+      product.stockQuantity <= threshold &&
       !product.lowStockAlertSent
     ) {
       await ctx.db.patch(args.productId, { lowStockAlertSent: true });
-      await ctx.scheduler.runAfter(0, internal.sms.sendSMS, {
-        to: sellerPhone,
-        message: `AURRIQ STOCK ALERT: "${product.name}" is running low — ${product.stockQuantity} unit${product.stockQuantity !== 1 ? "s" : ""} remaining (your alert is set at ${product.lowStockThreshold}). Restock soon!`,
-      });
+      await alert(`AURRIQ STOCK ALERT: "${product.name}" is running low - ${product.stockQuantity} unit${product.stockQuantity !== 1 ? "s" : ""} remaining (your alert is set at ${threshold}). Restock soon!`);
     }
   },
 });
+
 
 /**
  * Manually restock a product from the seller dashboard.

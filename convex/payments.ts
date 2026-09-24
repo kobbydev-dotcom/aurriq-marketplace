@@ -313,6 +313,28 @@ export const runMarketplaceSubscriptionMaintenance = internalMutation({
           marketplaceSubscriptionStatus: "locked",
           marketplaceLockedAt: now,
         });
+
+
+        const lockMessage = `${seller.name ?? "Aurriq vendor"}, your Aurriq seller subscription has expired and your vendor dashboard is now locked. Buyers can still check out. Renew with Top Up using your shop/vendor name as reference. ${supportLine()}`;
+        if (seller.phone) {
+          await ctx.scheduler.runAfter(0, internal.sms.sendSMS, { to: seller.phone, message: lockMessage });
+        }
+        const lockEmail = (seller as any).notifyEmail ?? seller.email;
+        if (lockEmail) {
+          await ctx.scheduler.runAfter(0, internal.mail.sendEmail, {
+            to: lockEmail,
+            subject: "Your Aurriq vendor dashboard is locked",
+            heading: "Subscription expired",
+            bodyLines: [lockMessage],
+            ctaText: "Renew now",
+            ctaUrl: `${process.env.AURRIQ_PUBLIC_URL ?? "https://aurriq.doabookpro.com"}/seller/dashboard`,
+          });
+        }
+
+
+
+
+
         await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
           userId: seller._id,
           type: "payment",
@@ -345,6 +367,23 @@ export const runMarketplaceSubscriptionMaintenance = internalMutation({
       if (seller.phone) {
         await ctx.scheduler.runAfter(0, internal.sms.sendSMS, { to: seller.phone, message });
       }
+
+
+
+
+
+      const warnEmail = (seller as any).notifyEmail ?? seller.email;
+      if (warnEmail) {
+        await ctx.scheduler.runAfter(0, internal.mail.sendEmail, {
+          to: warnEmail,
+          subject: isLastDay ? "Your Aurriq subscription ends today" : `Your Aurriq subscription ends in ${daysLeft} day(s)`,
+          heading: isLastDay ? "Subscription ends today" : "Subscription expiring soon",
+          bodyLines: [message, supportLine()],
+          ctaText: "Renew now",
+          ctaUrl: `${process.env.AURRIQ_PUBLIC_URL ?? "https://aurriq.doabookpro.com"}/seller/dashboard`,
+        });
+      }
+
       await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
         userId: seller._id,
         type: "payment",
