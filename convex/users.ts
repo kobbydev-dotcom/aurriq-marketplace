@@ -1,6 +1,38 @@
-import { action, mutation, query } from "./_generated/server";
+import { action, internalMutation, mutation, query } from "./_generated/server";
 import { v } from "convex/values";
 import { api, internal } from "./_generated/api";
+
+function normalizeEmail(value: unknown) {
+  return typeof value === "string" ? value.trim().toLowerCase() : "";
+}
+
+function normalizeBusinessSlug(value: unknown) {
+  const slug = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug) ? slug : "";
+}
+
+function isTrustedDoabookproVerificationUrl(value: string) {
+  try {
+    const url = new URL(value);
+    const tenantHost = url.hostname.endsWith(".doabookpro.com")
+      && normalizeBusinessSlug(url.hostname.slice(0, -".doabookpro.com".length))
+      && !["admin", "api", "www"].includes(url.hostname.slice(0, -".doabookpro.com".length));
+    const serviceHost = ["doabookpro.com", "admin.doabookpro.com"].includes(url.hostname);
+    return url.protocol === "https:" && (serviceHost || tenantHost) && !url.username && !url.password && !url.hash
+      ? url.toString()
+      : "";
+  } catch {
+    return "";
+  }
+}
+
+function currentUserWithVerifiedDoabookproLink(user: any) {
+  if (!user) return null;
+  return {
+    ...user,
+    doabookproSlug: user.doabookproLinkVerifiedAt ? user.doabookproSlug : undefined,
+  };
+}
 
 // Haversine distance in kilometers between two coordinates.
 function distanceKm(lat1: number, lon1: number, lat2: number, lon2: number) {
@@ -107,6 +139,7 @@ async function mergeUserInto(ctx: any, duplicate: any, canonical: any) {
     "longitude",
     "locationShared",
     "doabookproSlug",
+    "doabookproLinkVerifiedAt",
     "marketplaceSubscriptionStatus",
     "marketplacePlan",
     "marketplaceSubscriptionSource",
@@ -280,10 +313,13 @@ export const getStorefront = query({
         seller = null;
       }
     } else if (args.slug) {
-      const all = await ctx.db.query("users").collect();
-      seller = all.find((u: any) => u.doabookproSlug === args.slug) ?? null;
+      const sellers = await ctx.db
+        .query("users")
+        .withIndex("by_doabookpro_slug", (q) => q.eq("doabookproSlug", normalizeBusinessSlug(args.slug)))
+        .collect();
+      seller = sellers.find((candidate: any) => candidate.doabookproLinkVerifiedAt) ?? null;
     }
-    if (!seller) return null;
+    if (!seller || (args.slug && !seller.doabookproLinkVerifiedAt)) return null;
 
     const products = await ctx.db
       .query("products")
@@ -329,7 +365,7 @@ export const getStorefront = query({
         businessType: seller.businessType,
         isVerified: seller.isVerified,
         locationLabel: seller.locationShared ? seller.locationLabel : undefined,
-        doabookproSlug: seller.doabookproSlug,
+        doabookproSlug: seller.doabookproLinkVerifiedAt ? seller.doabookproSlug : undefined,
       },
       productCount: active.length,
       followerCount: followers.length,
@@ -479,14 +515,14 @@ export const current = query({
       : undefined;
     const authSubject = stableAuthSubject(identity);
     const authUser = await getAuthSubjectUser(ctx, authSubject);
-    if (authUser) return authUser;
+    if (authUser) return currentUserWithVerifiedDoabookproLink(authUser);
 
     if (authSubject) {
       const user = await ctx.db
         .query("users")
         .withIndex("by_auth_subject", (q) => q.eq("authSubject", authSubject))
         .unique();
-      if (user) return user;
+      if (user) return currentUserWithVerifiedDoabookproLink(user);
 
       const legacySubject = typeof (identity as any).subject === "string"
         ? String((identity as any).subject).trim()
@@ -495,16 +531,16 @@ export const current = query({
       const legacyUser = candidates.find((candidate: any) =>
         candidate.authSubject === legacySubject || candidate.authSubject?.startsWith(`${authSubject}|`)
       );
-      if (legacyUser) return legacyUser;
+      if (legacyUser) return currentUserWithVerifiedDoabookproLink(legacyUser);
     }
 
     const tokenUser = await ctx.db
       .query("users")
       .withIndex("by_token", (q) => q.eq("tokenIdentifier", identity.tokenIdentifier))
       .unique();
-    if (tokenUser) return tokenUser;
+    if (tokenUser) return currentUserWithVerifiedDoabookproLink(tokenUser);
 
-    return identityEmail ? await findEmailUser(ctx, identityEmail) : null;
+    return currentUserWithVerifiedDoabookproLink(identityEmail ? await findEmailUser(ctx, identityEmail) : null);
   },
 });
 
@@ -527,7 +563,6 @@ export const updateProfile = mutation({
     latitude: v.optional(v.number()),
     longitude: v.optional(v.number()),
     locationShared: v.optional(v.boolean()),
-    doabookproSlug: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -594,7 +629,6 @@ export const updateProfile = mutation({
     if (typeof args.latitude === "number") patch.latitude = args.latitude;
     if (typeof args.longitude === "number") patch.longitude = args.longitude;
     if (typeof args.locationShared === "boolean") patch.locationShared = args.locationShared;
-    if (typeof args.doabookproSlug === "string") patch.doabookproSlug = args.doabookproSlug.trim();
     if (typeof args.isSeller === "boolean") patch.isSeller = args.isSeller;
     if (args.role === "seller") patch.isSeller = true;
     if (identityEmail && !user?.email) patch.email = identityEmail;
@@ -608,6 +642,99 @@ export const updateProfile = mutation({
     }
 
     return true;
+  },
+});
+
+// Authenticated sellers ask DOABookPro to begin a credential-confirmed linking
+// flow. The password is entered only on DOABookPro and is never sent to Aurriq.
+export const createDoabookproBusinessLink = action({
+  args: {},
+  handler: async (ctx) => {
+    const user: any = await ctx.runQuery(api.users.current, {});
+    if (!user) throw new Error("Sign in to link your DOABookPro business.");
+    if (!user.isSeller && user.role !== "seller") throw new Error("This action is available from your Aurriq seller account.");
+    const sellerEmail = normalizeEmail(user.email);
+    if (!sellerEmail) throw new Error("Add an email to your Aurriq account before linking your business.");
+
+    if (user.doabookproLinkVerifiedAt && user.doabookproSlug) {
+      return { alreadyLinked: true, slug: user.doabookproSlug };
+    }
+
+    const activationRequestUrl = process.env.DOABOOKPRO_MARKETPLACE_REQUEST_URL;
+    const secret = process.env.DOABOOKPRO_MARKETPLACE_SECRET;
+    if (!activationRequestUrl || !secret) throw new Error("DOABookPro account linking is not configured yet.");
+
+    let createLinkUrl: URL;
+    try {
+      createLinkUrl = new URL(activationRequestUrl);
+    } catch {
+      throw new Error("DOABookPro account linking is not configured yet.");
+    }
+    if (createLinkUrl.protocol !== "https:" || createLinkUrl.hostname !== "admin.doabookpro.com" || createLinkUrl.username || createLinkUrl.password || !/\/marketplace-activation-request\/?$/.test(createLinkUrl.pathname)) {
+      throw new Error("DOABookPro account linking is not configured yet.");
+    }
+    createLinkUrl.pathname = createLinkUrl.pathname.replace(/\/marketplace-activation-request\/?$/, "/aurriq/create-business-link");
+    createLinkUrl.search = "";
+    createLinkUrl.hash = "";
+
+    const response = await fetch(createLinkUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+      body: JSON.stringify({ sellerId: String(user._id), sellerEmail }),
+    });
+    if (!response.ok) {
+      if (response.status === 409) throw new Error("The DOABookPro business email must match your Aurriq account email.");
+      throw new Error("DOABookPro could not start account linking. Please try again later.");
+    }
+
+    const result = await response.json().catch(() => null);
+    if (result?.alreadyLinked === true) {
+      const businessSlug = normalizeBusinessSlug(result.businessSlug);
+      if (!businessSlug) throw new Error("DOABookPro returned an invalid linked business.");
+      return { alreadyLinked: true, slug: businessSlug };
+    }
+    const linkUrl = typeof result?.linkUrl === "string" ? result.linkUrl : "";
+    const trustedLinkUrl = isTrustedDoabookproVerificationUrl(linkUrl);
+    if (!trustedLinkUrl) {
+      throw new Error("DOABookPro returned an invalid account-link address.");
+    }
+    return { linkUrl: trustedLinkUrl, alreadyLinked: false };
+  },
+});
+
+// Private callback target. The HTTP route authenticates the DOABookPro service
+// before invoking this transaction, which checks the email and slug uniqueness
+// again before binding the verified owner to their existing Aurriq seller ID.
+export const completeDoabookproBusinessLink = internalMutation({
+  args: { sellerId: v.string(), ownerEmail: v.string(), businessSlug: v.string() },
+  handler: async (ctx, args) => {
+    const sellerId = args.sellerId as any;
+    const seller: any = await ctx.db.get(sellerId);
+    const ownerEmail = normalizeEmail(args.ownerEmail);
+    const sellerEmail = normalizeEmail(seller?.email);
+    const businessSlug = normalizeBusinessSlug(args.businessSlug);
+    if (!seller || !ownerEmail || ownerEmail !== sellerEmail || !businessSlug) {
+      throw new Error("The confirmed business owner does not match this Aurriq seller account.");
+    }
+
+    const slugMatches = await ctx.db
+      .query("users")
+      .withIndex("by_doabookpro_slug", (q) => q.eq("doabookproSlug", businessSlug))
+      .collect();
+    if (slugMatches.some((candidate: any) => candidate._id !== seller._id && candidate.doabookproLinkVerifiedAt)) {
+      throw new Error("That DOABookPro business is already linked to another Aurriq account.");
+    }
+
+    if (seller.doabookproLinkVerifiedAt) {
+      if (seller.doabookproSlug !== businessSlug) throw new Error("This Aurriq account is already linked to a different DOABookPro business.");
+      return { linked: true, alreadyLinked: true };
+    }
+
+    await ctx.db.patch(seller._id, {
+      doabookproSlug: businessSlug,
+      doabookproLinkVerifiedAt: Date.now(),
+    });
+    return { linked: true, alreadyLinked: false };
   },
 });
 

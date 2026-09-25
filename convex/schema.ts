@@ -37,6 +37,8 @@ export default defineSchema({
     locationShared: v.optional(v.boolean()),
     // Link to the seller's DOABookPro booking page (subdomain/slug) for the booking↔shop loop.
     doabookproSlug: v.optional(v.string()),
+    // Set only after DOABookPro confirms the owner password and calls back.
+    doabookproLinkVerifiedAt: v.optional(v.number()),
     // Separate Aurriq marketplace vendor entitlement. This is intentionally
     // independent from any DOABookPro booking subscription.
     marketplaceSubscriptionStatus: v.optional(v.string()),
@@ -61,6 +63,7 @@ export default defineSchema({
   .index("by_token", ["tokenIdentifier"])
   .index("by_auth_subject", ["authSubject"])
   .index("by_marketplace_payment_reference", ["marketplacePaymentReference"])
+  .index("by_doabookpro_slug", ["doabookproSlug"])
   .index("email", ["email"]),
 
   products: defineTable({

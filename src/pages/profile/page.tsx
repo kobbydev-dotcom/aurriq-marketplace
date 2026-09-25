@@ -79,7 +79,6 @@ export default function ProfilePage() {
   const [locationLabel, setLocationLabel] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationShared, setLocationShared] = useState(false);
-  const [doabookproSlug, setDoabookproSlug] = useState("");
   const [locating, setLocating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -117,7 +116,6 @@ export default function ProfilePage() {
       setCustomServiceDescription((user as any).customServiceDescription ?? "");
       setLocationLabel((user as any).locationLabel ?? "");
       setLocationShared((user as any).locationShared ?? false);
-      setDoabookproSlug((user as any).doabookproSlug ?? "");
       if (typeof (user as any).latitude === "number" && typeof (user as any).longitude === "number") {
         setCoords({ lat: (user as any).latitude, lng: (user as any).longitude });
       }
@@ -177,7 +175,6 @@ export default function ProfilePage() {
         latitude: coords?.lat,
         longitude: coords?.lng,
         locationShared,
-        doabookproSlug: doabookproSlug.trim() || undefined,
       });
       if ((user as any)?.marketplacePaymentReference) {
         try {
@@ -543,23 +540,6 @@ export default function ProfilePage() {
                   onChange={(event) => setCustomServiceDescription(event.target.value)}
                   maxLength={500}
                 />
-              </div>
-
-              <div className="space-y-2">
-                <Label>DOABookPro booking page <span className="text-muted-foreground text-xs">(optional)</span></Label>
-                <div className="flex items-center gap-0 rounded-md border border-input overflow-hidden focus-within:ring-2 focus-within:ring-ring">
-                  <span className="px-3 text-sm text-muted-foreground bg-muted/50 border-r border-input h-10 flex items-center">https://</span>
-                  <Input
-                    className="border-0 rounded-none focus-visible:ring-0"
-                    placeholder="yourshop"
-                    value={doabookproSlug}
-                    onChange={(e) => setDoabookproSlug(e.target.value)}
-                  />
-                  <span className="px-3 text-sm text-muted-foreground bg-muted/50 border-l border-input h-10 flex items-center">.doabookpro.com</span>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Link your booking page so buyers can book appointments with you directly from your products — and your booking page can show your shop.
-                </p>
               </div>
 
               <Button onClick={handleSave} disabled={isLoading || !fullName.trim()}>

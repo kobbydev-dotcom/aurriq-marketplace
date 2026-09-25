@@ -168,7 +168,7 @@ export const mergeDuplicateUser = mutation({
       throw new Error("Users must have the same email");
     }
 
-    const copyFields = ["name", "image", "phone", "avatar", "paymentMethod", "paymentNetwork", "paymentAccount", "businessType", "serviceTypes", "customServiceDescription", "notifyEmail", "avatarStorageId", "locationLabel", "latitude", "longitude", "locationShared", "doabookproSlug", "marketplaceSubscriptionStatus", "marketplacePlan", "marketplaceSubscriptionSource", "marketplacePaidUntil", "marketplacePaymentReference"];
+    const copyFields = ["name", "image", "phone", "avatar", "paymentMethod", "paymentNetwork", "paymentAccount", "businessType", "serviceTypes", "customServiceDescription", "notifyEmail", "avatarStorageId", "locationLabel", "latitude", "longitude", "locationShared", "doabookproSlug", "doabookproLinkVerifiedAt", "marketplaceSubscriptionStatus", "marketplacePlan", "marketplaceSubscriptionSource", "marketplacePaidUntil", "marketplacePaymentReference"];
     const patch: Record<string, unknown> = {};
     for (const field of copyFields) {
       if (canonical[field] === undefined && duplicate[field] !== undefined) patch[field] = duplicate[field];
