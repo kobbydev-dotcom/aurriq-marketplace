@@ -57,10 +57,10 @@ function DoabookproAccountLink({ slug }: { slug?: string }) {
   const [linking, setLinking] = useState(false);
   const safeSlug = slug && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug) ? slug : "";
 
-  const handleLink = async () => {
+  const handleLink = async (repair = false) => {
     setLinking(true);
     try {
-      const result = await requestBusinessLink({});
+      const result = await requestBusinessLink({ repair });
       if (typeof result?.linkUrl === "string") {
         window.location.assign(result.linkUrl);
         return;
@@ -89,16 +89,17 @@ function DoabookproAccountLink({ slug }: { slug?: string }) {
           </p>
         </div>
       </div>
-      {safeSlug ? (
-        <a href={`https://${safeSlug}.doabookpro.com`} target="_blank" rel="noopener noreferrer" className="mt-3 inline-flex shrink-0 items-center gap-2 rounded-md border border-primary/30 bg-background px-3 py-2 text-sm font-medium text-primary hover:bg-primary/5 sm:mt-0">
-          Visit linked booking page <ExternalLink className="size-4" />
-        </a>
-      ) : (
-        <Button onClick={handleLink} disabled={linking} className="mt-3 shrink-0 gap-2 sm:mt-0">
+      <div className="mt-3 flex shrink-0 flex-wrap items-center gap-2 sm:mt-0">
+        {safeSlug && (
+          <a href={"https://" + safeSlug + ".doabookpro.com"} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-md border border-primary/30 bg-background px-3 py-2 text-sm font-medium text-primary hover:bg-primary/5">
+            Visit linked booking page <ExternalLink className="size-4" />
+          </a>
+        )}
+        <Button onClick={() => handleLink(Boolean(safeSlug))} disabled={linking} variant={safeSlug ? "outline" : "default"} className="gap-2">
           {linking ? <Loader2 className="size-4 animate-spin" /> : <Store className="size-4" />}
-          {linking ? "Connecting..." : "Link my business"}
+          {linking ? "Connecting..." : safeSlug ? "Repair connection" : "Link my business"}
         </Button>
-      )}
+      </div>
     </div>
   );
 }

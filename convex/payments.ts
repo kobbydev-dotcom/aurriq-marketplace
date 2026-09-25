@@ -466,12 +466,21 @@ export const rejectMarketplaceSubscriptionFromSuperadmin = mutation({
     if (!expected || args.activationSecret !== expected) {
       throw new Error("Unauthorized rejection request");
     }
+    const seller = await ctx.db
+      .query("users")
+      .withIndex("by_marketplace_payment_reference", (q) =>
+        q.eq("marketplacePaymentReference", args.paymentReference),
+      )
+      .first();
+    if (!seller) {
+      return { rejected: true, userFound: false };
+    }
     await ctx.runMutation(internal.payments.applyMarketplaceSubscription, {
       paymentReference: args.paymentReference,
       status: "failed",
       transactionId: args.transactionId,
     });
-    return { rejected: true };
+    return { rejected: true, userFound: true };
   },
 });
 

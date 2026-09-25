@@ -648,15 +648,15 @@ export const updateProfile = mutation({
 // Authenticated sellers ask DOABookPro to begin a credential-confirmed linking
 // flow. The password is entered only on DOABookPro and is never sent to Aurriq.
 export const createDoabookproBusinessLink = action({
-  args: {},
-  handler: async (ctx) => {
+  args: { repair: v.optional(v.boolean()) },
+  handler: async (ctx, args) => {
     const user: any = await ctx.runQuery(api.users.current, {});
     if (!user) throw new Error("Sign in to link your DOABookPro business.");
     if (!user.isSeller && user.role !== "seller") throw new Error("This action is available from your Aurriq seller account.");
     const sellerEmail = normalizeEmail(user.email);
     if (!sellerEmail) throw new Error("Add an email to your Aurriq account before linking your business.");
 
-    if (user.doabookproLinkVerifiedAt && user.doabookproSlug) {
+    if (user.doabookproLinkVerifiedAt && user.doabookproSlug && !args.repair) {
       return { alreadyLinked: true, slug: user.doabookproSlug };
     }
 
@@ -682,12 +682,20 @@ export const createDoabookproBusinessLink = action({
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
       body: JSON.stringify({ sellerId: String(user._id), sellerEmail }),
     });
-    if (!response.ok) {
-      if (response.status === 409) throw new Error("The DOABookPro business email must match your Aurriq account email.");
-      throw new Error("DOABookPro could not start account linking. Please try again later.");
-    }
-
     const result = await response.json().catch(() => null);
+    if (!response.ok) {
+      const remoteError = typeof result?.error === "string" ? result.error : "";
+      if (response.status === 404) {
+        throw new Error("No active DOABookPro business was found for this Aurriq email. Confirm both accounts use the same email and that the booking business is active.");
+      }
+      if (response.status === 409 && remoteError) {
+        throw new Error(remoteError);
+      }
+      if (response.status === 401) {
+        throw new Error("The secure DOABookPro connection could not be authenticated. Please contact support.");
+      }
+      throw new Error("DOABookPro could not start account linking right now. Please try again.");
+    }
     if (result?.alreadyLinked === true) {
       const businessSlug = normalizeBusinessSlug(result.businessSlug);
       if (!businessSlug) throw new Error("DOABookPro returned an invalid linked business.");

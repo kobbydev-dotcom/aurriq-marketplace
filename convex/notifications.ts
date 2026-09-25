@@ -1,5 +1,5 @@
-import { mutation, query } from "./_generated/server";
-import { internalMutation } from "./_generated/server";
+import { internalAction, internalMutation, mutation, query } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 
 async function currentMarketplaceUser(ctx: any, identity: any) {
@@ -28,7 +28,7 @@ export const createNotification = internalMutation({
     link: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await ctx.db.insert("notifications", {
+    const notificationId = await ctx.db.insert("notifications", {
       userId: args.userId,
       type: args.type,
       title: args.title,
@@ -36,6 +36,76 @@ export const createNotification = internalMutation({
       link: args.link,
       isRead: false,
     });
+
+    if (args.type === "order_placed" || args.type === "low_stock") {
+      const recipient: any = await ctx.db.get(args.userId);
+      if (recipient?.doabookproLinkVerifiedAt && recipient.doabookproSlug && recipient.email) {
+        await ctx.scheduler.runAfter(0, internal.notifications.forwardDoabookproNotification, {
+          eventId: String(notificationId),
+          sellerId: String(recipient._id),
+          sellerEmail: recipient.email,
+          businessSlug: recipient.doabookproSlug,
+          eventType: args.type,
+          title: args.title,
+          message: args.body ?? args.title,
+        });
+      }
+    }
+  },
+});
+
+export const forwardDoabookproNotification = internalAction({
+  args: {
+    eventId: v.string(),
+    sellerId: v.string(),
+    sellerEmail: v.string(),
+    businessSlug: v.string(),
+    eventType: v.union(v.literal("order_placed"), v.literal("low_stock")),
+    title: v.string(),
+    message: v.string(),
+  },
+  handler: async (_ctx, args) => {
+    const requestUrl = process.env.DOABOOKPRO_MARKETPLACE_REQUEST_URL;
+    const secret = process.env.DOABOOKPRO_MARKETPLACE_SECRET;
+    if (!requestUrl || !secret) return { skipped: true, reason: "not_configured" };
+
+    let endpoint: URL;
+    try {
+      endpoint = new URL(requestUrl);
+    } catch {
+      return { skipped: true, reason: "invalid_configuration" };
+    }
+    if (
+      endpoint.protocol !== "https:" ||
+      endpoint.hostname !== "admin.doabookpro.com" ||
+      !/\/api\/aurriq\/marketplace-activation-request\/?$/.test(endpoint.pathname)
+    ) {
+      return { skipped: true, reason: "invalid_configuration" };
+    }
+    endpoint.pathname = endpoint.pathname.replace(
+      /\/api\/aurriq\/marketplace-activation-request\/?$/,
+      "/api/aurriq/marketplace-notification",
+    );
+    endpoint.search = "";
+    endpoint.hash = "";
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + secret },
+      body: JSON.stringify({
+        eventId: args.eventId,
+        sellerId: args.sellerId,
+        sellerEmail: args.sellerEmail,
+        businessSlug: args.businessSlug,
+        eventType: args.eventType,
+        title: args.title,
+        message: args.message,
+      }),
+    });
+    if (!response.ok) {
+      throw new Error("DOABookPro marketplace notification returned HTTP " + response.status);
+    }
+    return { forwarded: true };
   },
 });
 

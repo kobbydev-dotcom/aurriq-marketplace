@@ -13,7 +13,7 @@ export default function SSOLandingPage() {
       return;
     }
 
-    fetch("https://kobby.doabookpro.com/api/auth/verify-sso", {
+    fetch("https://admin.doabookpro.com/api/auth/verify-sso", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ token }),

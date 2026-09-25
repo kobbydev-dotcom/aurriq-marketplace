@@ -34,7 +34,7 @@ export const setStock = internalMutation({
           body: `"${product.name}" you saved is available again.`,
           link: `/product/${args.productId}`,
         });
-      }
+    }
     }
   },
 });
@@ -107,7 +107,6 @@ export const checkAndSendAlerts = internalMutation({
     const sellerPhone = seller?.phone;
     const sellerEmail = seller?.notifyEmail ?? seller?.email;
     const threshold = product.lowStockThreshold > 0 ? product.lowStockThreshold : 5;
-    if (!sellerPhone && !sellerEmail) return;
     const alert = async (message: string) => {
       if (sellerPhone) await ctx.scheduler.runAfter(0, internal.sms.sendSMS, { to: sellerPhone, message });
       if (sellerEmail) await ctx.scheduler.runAfter(0, internal.mail.sendEmail, {
@@ -118,7 +117,15 @@ export const checkAndSendAlerts = internalMutation({
 
     if (product.stockQuantity === 0 && !product.outOfStockAlertSent) {
       await ctx.db.patch(args.productId, { outOfStockAlertSent: true });
-      await alert(`AURRIQ STOCK ALERT: "${product.name}" is now OUT OF STOCK (0 units remaining). Update your listing to avoid missing sales.`);
+      const message = "AURRIQ STOCK ALERT: \"" + product.name + "\" is now OUT OF STOCK (0 units remaining). Update your listing to avoid missing sales.";
+      await alert(message);
+      await ctx.runMutation(internal.notifications.createNotification, {
+        userId: product.sellerId,
+        type: "low_stock",
+        title: "Product out of stock",
+        body: message,
+        link: "/seller/dashboard",
+      });
       return;
     }
 
@@ -128,7 +135,17 @@ export const checkAndSendAlerts = internalMutation({
       !product.lowStockAlertSent
     ) {
       await ctx.db.patch(args.productId, { lowStockAlertSent: true });
-      await alert(`AURRIQ STOCK ALERT: "${product.name}" is running low - ${product.stockQuantity} unit${product.stockQuantity !== 1 ? "s" : ""} remaining (your alert is set at ${threshold}). Restock soon!`);
+      const message = "AURRIQ STOCK ALERT: \"" + product.name + "\" is running low - " +
+        product.stockQuantity + " unit" + (product.stockQuantity !== 1 ? "s" : "") +
+        " remaining (your alert is set at " + threshold + "). Restock soon!";
+      await alert(message);
+      await ctx.runMutation(internal.notifications.createNotification, {
+        userId: product.sellerId,
+        type: "low_stock",
+        title: "Low stock alert",
+        body: message,
+        link: "/seller/dashboard",
+      });
     }
   },
 });
