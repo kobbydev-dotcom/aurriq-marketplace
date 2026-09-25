@@ -61,6 +61,10 @@ function DoabookproAccountLink({ slug }: { slug?: string }) {
     setLinking(true);
     try {
       const result = await requestBusinessLink({ repair });
+      if (typeof result?.error === "string") {
+        toast.error(result.error);
+        return;
+      }
       if (typeof result?.linkUrl === "string") {
         window.location.assign(result.linkUrl);
         return;

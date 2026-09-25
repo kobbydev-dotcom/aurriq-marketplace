@@ -319,7 +319,13 @@ export const getStorefront = query({
         .collect();
       seller = sellers.find((candidate: any) => candidate.doabookproLinkVerifiedAt) ?? null;
     }
-    if (!seller || (args.slug && !seller.doabookproLinkVerifiedAt)) return null;
+    const isActiveVendor = Boolean(
+      seller
+      && (seller.isSeller === true || seller.role === "seller")
+      && seller.marketplaceSubscriptionStatus === "active"
+      && !(typeof seller.marketplacePaidUntil === "number" && seller.marketplacePaidUntil < Date.now())
+    );
+    if (!isActiveVendor || (args.slug && !seller.doabookproLinkVerifiedAt)) return null;
 
     const products = await ctx.db
       .query("products")
@@ -650,63 +656,61 @@ export const updateProfile = mutation({
 export const createDoabookproBusinessLink = action({
   args: { repair: v.optional(v.boolean()) },
   handler: async (ctx, args) => {
-    const user: any = await ctx.runQuery(api.users.current, {});
-    if (!user) throw new Error("Sign in to link your DOABookPro business.");
-    if (!user.isSeller && user.role !== "seller") throw new Error("This action is available from your Aurriq seller account.");
-    const sellerEmail = normalizeEmail(user.email);
-    if (!sellerEmail) throw new Error("Add an email to your Aurriq account before linking your business.");
-
-    if (user.doabookproLinkVerifiedAt && user.doabookproSlug && !args.repair) {
-      return { alreadyLinked: true, slug: user.doabookproSlug };
-    }
-
-    const activationRequestUrl = process.env.DOABOOKPRO_MARKETPLACE_REQUEST_URL;
-    const secret = process.env.DOABOOKPRO_MARKETPLACE_SECRET;
-    if (!activationRequestUrl || !secret) throw new Error("DOABookPro account linking is not configured yet.");
-
-    let createLinkUrl: URL;
     try {
-      createLinkUrl = new URL(activationRequestUrl);
-    } catch {
-      throw new Error("DOABookPro account linking is not configured yet.");
-    }
-    if (createLinkUrl.protocol !== "https:" || createLinkUrl.hostname !== "admin.doabookpro.com" || createLinkUrl.username || createLinkUrl.password || !/\/marketplace-activation-request\/?$/.test(createLinkUrl.pathname)) {
-      throw new Error("DOABookPro account linking is not configured yet.");
-    }
-    createLinkUrl.pathname = createLinkUrl.pathname.replace(/\/marketplace-activation-request\/?$/, "/aurriq/create-business-link");
-    createLinkUrl.search = "";
-    createLinkUrl.hash = "";
+      const user: any = await ctx.runQuery(api.users.current, {});
+      if (!user) return { error: "Sign in to link your DOABookPro business." };
+      if (!user.isSeller && user.role !== "seller") return { error: "This action is available from your Aurriq seller account." };
+      const sellerEmail = normalizeEmail(user.email);
+      if (!sellerEmail) return { error: "Add an email to your Aurriq account before linking your business." };
 
-    const response = await fetch(createLinkUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
-      body: JSON.stringify({ sellerId: String(user._id), sellerEmail }),
-    });
-    const result = await response.json().catch(() => null);
-    if (!response.ok) {
-      const remoteError = typeof result?.error === "string" ? result.error : "";
-      if (response.status === 404) {
-        throw new Error("No active DOABookPro business was found for this Aurriq email. Confirm both accounts use the same email and that the booking business is active.");
+      if (user.doabookproLinkVerifiedAt && user.doabookproSlug && !args.repair) {
+        return { alreadyLinked: true, slug: user.doabookproSlug };
       }
-      if (response.status === 409 && remoteError) {
-        throw new Error(remoteError);
+
+      const activationRequestUrl = process.env.DOABOOKPRO_MARKETPLACE_REQUEST_URL;
+      const secret = process.env.DOABOOKPRO_MARKETPLACE_SECRET;
+      if (!activationRequestUrl || !secret) return { error: "DOABookPro account linking is not configured yet." };
+
+      let createLinkUrl: URL;
+      try {
+        createLinkUrl = new URL(activationRequestUrl);
+      } catch {
+        return { error: "DOABookPro account linking is not configured yet." };
       }
-      if (response.status === 401) {
-        throw new Error("The secure DOABookPro connection could not be authenticated. Please contact support.");
+      if (createLinkUrl.protocol !== "https:" || createLinkUrl.hostname !== "admin.doabookpro.com" || createLinkUrl.username || createLinkUrl.password || !/\/marketplace-activation-request\/?$/.test(createLinkUrl.pathname)) {
+        return { error: "DOABookPro account linking is not configured yet." };
       }
-      throw new Error("DOABookPro could not start account linking right now. Please try again.");
+      createLinkUrl.pathname = createLinkUrl.pathname.replace(/\/marketplace-activation-request\/?$/, "/aurriq/create-business-link");
+      createLinkUrl.search = "";
+      createLinkUrl.hash = "";
+
+      const response = await fetch(createLinkUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
+        body: JSON.stringify({ sellerId: String(user._id), sellerEmail }),
+      });
+      const result = await response.json().catch(() => null);
+      if (!response.ok) {
+        const remoteError = typeof result?.error === "string" ? result.error : "";
+        if (response.status === 404) {
+          return { error: "No active DOABookPro business was found for this Aurriq email. Confirm both accounts use the same email and that the booking business is active." };
+        }
+        if (remoteError && [401, 409, 502].includes(response.status)) return { error: remoteError };
+        return { error: "DOABookPro could not start account linking right now. Please try again." };
+      }
+      if (result?.alreadyLinked === true) {
+        const businessSlug = normalizeBusinessSlug(result.businessSlug);
+        if (!businessSlug) return { error: "DOABookPro returned an invalid linked business." };
+        return { alreadyLinked: true, slug: businessSlug };
+      }
+      const linkUrl = typeof result?.linkUrl === "string" ? result.linkUrl : "";
+      const trustedLinkUrl = isTrustedDoabookproVerificationUrl(linkUrl);
+      if (!trustedLinkUrl) return { error: "DOABookPro returned an invalid account-link address." };
+      return { linkUrl: trustedLinkUrl, alreadyLinked: false };
+    } catch (error) {
+      console.error("Unable to start DOABookPro business link", error);
+      return { error: "We could not start the secure DOABookPro link. Please try again; if it repeats, contact support with the time of your attempt." };
     }
-    if (result?.alreadyLinked === true) {
-      const businessSlug = normalizeBusinessSlug(result.businessSlug);
-      if (!businessSlug) throw new Error("DOABookPro returned an invalid linked business.");
-      return { alreadyLinked: true, slug: businessSlug };
-    }
-    const linkUrl = typeof result?.linkUrl === "string" ? result.linkUrl : "";
-    const trustedLinkUrl = isTrustedDoabookproVerificationUrl(linkUrl);
-    if (!trustedLinkUrl) {
-      throw new Error("DOABookPro returned an invalid account-link address.");
-    }
-    return { linkUrl: trustedLinkUrl, alreadyLinked: false };
   },
 });
 
