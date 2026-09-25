@@ -35,12 +35,15 @@ export const getLiveStats = query({
     const products = await ctx.db.query("products").collect();
     const orders = await ctx.db.query("orders").collect();
 
-    const vendors = activeUsers.filter((user: any) => user.isSeller === true || user.role === "seller");
+    const isVendor = (user: any) => user.isSeller === true || user.role === "seller" || user.marketplaceSubscriptionStatus === "active";
+    const vendors = activeUsers.filter(isVendor);
+    const buyers = activeUsers.filter((user: any) => user.role !== "admin" && !isVendor(user)).length;
     const liveProducts = products.filter((product: any) => product.isActive && product.stockQuantity > 0);
     const completedSales = orders.filter((order: any) => !["cancelled", "awaiting_payment"].includes(order.status));
 
     return {
       members: activeUsers.length,
+      buyers,
       vendors: vendors.length,
       products: liveProducts.length,
       sales: completedSales.length,

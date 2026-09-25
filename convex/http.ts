@@ -150,6 +150,22 @@ const CORS_HEADERS = {
 	"Access-Control-Allow-Headers": "Content-Type",
 };
 
+http.route({
+	path: "/public-stats",
+	method: "OPTIONS",
+	handler: httpAction(async () => new Response(null, { status: 204, headers: CORS_HEADERS })),
+});
+http.route({
+	path: "/public-stats",
+	method: "GET",
+	handler: httpAction(async (ctx) => {
+		const stats = await ctx.runQuery(api.platform.getLiveStats, {});
+		return new Response(JSON.stringify({ buyers: stats.buyers, vendors: stats.vendors }), {
+			status: 200,
+			headers: { "Content-Type": "application/json", "Cache-Control": "no-store", ...CORS_HEADERS },
+		});
+	}),
+});
 // Public JSON: a seller's storefront, by Convex sellerId or DOABookPro slug.
 // Lets the DOABookPro client booking page embed the owner's shop with no auth.
 http.route({
