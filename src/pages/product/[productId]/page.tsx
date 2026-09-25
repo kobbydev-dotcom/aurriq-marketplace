@@ -2,7 +2,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../convex/_generated/api.js";
-import { ShoppingCart, MessageCircle, Phone, ArrowLeft, Package, ChevronLeft, ChevronRight, Loader2, Plus, Minus, Flag, Video, Eye, Heart, Star, FileText, Calendar } from "lucide-react";
+import { ShoppingCart, MessageCircle, Phone, ArrowLeft, Package, ChevronLeft, ChevronRight, Loader2, Plus, Minus, Flag, Video, Eye, Heart, Star, FileText, Calendar, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Badge } from "@/components/ui/badge.tsx";
 import { Skeleton } from "@/components/ui/skeleton.tsx";
@@ -76,6 +76,7 @@ export default function ProductDetailPage() {
     productId ? { productId: productId as Id<"products"> } : "skip"
   ) as any;
   const addReview = useMutation((api.reviews as any).addReview);
+  const deleteReview = useMutation((api.reviews as any).deleteReviewBySeller);
   const submitRfq = useMutation((api.rfq as any).submitRfq);
   const [myRating, setMyRating] = useState(0);
   const [myComment, setMyComment] = useState("");
@@ -119,6 +120,15 @@ export default function ProductDetailPage() {
       toast.success(res.wishlisted ? "Added to your wishlist" : "Removed from wishlist");
     } catch {
       toast.error("Sign in to save items");
+    }
+  };
+
+  const handleDeleteReview = async (reviewId: Id<"reviews">) => {
+    try {
+      await deleteReview({ reviewId });
+      toast.success("Review removed from the product; it remains in Aurriq admin history.");
+    } catch (e) {
+      toast.error(e instanceof ConvexError ? (e.data as { message: string }).message : "Could not remove review");
     }
   };
 
@@ -590,15 +600,20 @@ export default function ProductDetailPage() {
           <div className="space-y-4">
             {reviews.map((r) => (
               <div key={r._id} className="border-b border-border/40 pb-4">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-sm font-medium">{r.userName}</span>
-                  <span className="flex items-center gap-0.5">
-                    {[1, 2, 3, 4, 5].map((n) => (
-                      <Star key={n} className={`size-3 ${n <= r.rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`} />
-                    ))}
-                  </span>
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className="text-sm font-medium">{r.userName}</span>
+                      <span className="flex items-center gap-0.5">
+                        {[1, 2, 3, 4, 5].map((n) => (
+                          <Star key={n} className={`size-3 ${n <= r.rating ? "fill-amber-400 text-amber-400" : "text-muted-foreground/30"}`} />
+                        ))}
+                      </span>
+                    </div>
+                    {r.comment && <p className="text-sm text-muted-foreground">{r.comment}</p>}
+                  </div>
+                  {r.canDelete && <Button size="sm" variant="ghost" className="text-destructive shrink-0" onClick={() => handleDeleteReview(r._id as Id<"reviews">)} aria-label="Remove review from product"><Trash2 className="size-4 mr-1" />Remove</Button>}
                 </div>
-                {r.comment && <p className="text-sm text-muted-foreground">{r.comment}</p>}
               </div>
             ))}
           </div>

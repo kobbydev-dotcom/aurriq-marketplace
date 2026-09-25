@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../convex/_generated/api.js";
 import { Authenticated, Unauthenticated, AuthLoading } from "convex/react";
 import {
-  ShieldCheck, Users, Flag, CheckCircle, XCircle, Clock,
+  ShieldCheck, Users, Flag, CheckCircle, XCircle, Clock, Star,
   BadgeCheck, BadgeMinus, Loader2, Eye
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
@@ -267,6 +267,18 @@ function ReportsPanel() {
   );
 }
 
+// ── Retained vendor-removed review history (platform admin only) ──
+function ReviewsHistoryPanel() {
+  const reviews = useQuery((api.reviews as any).listDeletedReviewsAdmin, {}) as any[] | undefined;
+  if (reviews === undefined) return <div className="space-y-3">{Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-24 w-full" />)}</div>;
+  if (reviews.length === 0) return <Empty><EmptyHeader><EmptyMedia variant="icon"><Star /></EmptyMedia><EmptyTitle>No removed reviews</EmptyTitle><EmptyDescription>Vendor-removed reviews will be retained here with their product and seller details.</EmptyDescription></EmptyHeader></Empty>;
+  return <div className="space-y-3">{reviews.map((review) => <Card key={review._id}><CardContent className="p-4 space-y-2">
+    <div className="flex flex-wrap justify-between gap-2"><div><p className="font-medium">{review.productName}</p><p className="text-xs text-muted-foreground">Vendor: {review.sellerName} · Reviewer: {review.reviewerName}</p></div><Badge variant="secondary">{new Date(review.deletedAt).toLocaleString()}</Badge></div>
+    <p className="text-sm"><span className="text-amber-500">{"★".repeat(review.rating)}</span> {review.rating}/5</p>
+    {review.comment && <p className="text-sm text-muted-foreground whitespace-pre-wrap">{review.comment}</p>}
+  </CardContent></Card>)}</div>;
+}
+
 // ── Admin Page ──
 function AdminPageInner() {
   const currentUser = useQuery(api.users.current, {});
@@ -318,6 +330,7 @@ function AdminPageInner() {
           <TabsTrigger value="sellers" className="gap-2 cursor-pointer">
             <Users className="size-3.5" /> Sellers
           </TabsTrigger>
+          {currentUser?.role === "admin" && <TabsTrigger value="reviews" className="gap-2 cursor-pointer"><Star className="size-3.5" /> Review History</TabsTrigger>}
         </TabsList>
         <TabsContent value="reports">
           <ReportsPanel />
@@ -325,6 +338,7 @@ function AdminPageInner() {
         <TabsContent value="sellers">
           <SellersPanel />
         </TabsContent>
+        {currentUser?.role === "admin" && <TabsContent value="reviews"><ReviewsHistoryPanel /></TabsContent>}
       </Tabs>
     </div>
   );

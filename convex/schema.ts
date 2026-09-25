@@ -191,9 +191,15 @@ export default defineSchema({
     userId: v.id("users"),
     rating: v.number(),
     comment: v.optional(v.string()),
+    // Seller removals are soft-hidden. Keep the original record and context for admin review.
+    deletedAt: v.optional(v.number()),
+    deletedBySellerId: v.optional(v.id("users")),
+    productNameSnapshot: v.optional(v.string()),
+    sellerNameSnapshot: v.optional(v.string()),
   })
     .index("by_product", ["productId"])
-    .index("by_user_and_product", ["userId", "productId"]),
+    .index("by_user_and_product", ["userId", "productId"])
+    .index("by_deleted_at", ["deletedAt"]),
 
   // Wishlist / favorites.
   wishlist: defineTable({
