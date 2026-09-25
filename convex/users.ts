@@ -692,10 +692,8 @@ export const createDoabookproBusinessLink = action({
       const result = await response.json().catch(() => null);
       if (!response.ok) {
         const remoteError = typeof result?.error === "string" ? result.error : "";
-        if (response.status === 404) {
-          return { error: "No active DOABookPro business was found for this Aurriq email. Confirm both accounts use the same email and that the booking business is active." };
-        }
-        if (remoteError && [401, 409, 502].includes(response.status)) return { error: remoteError };
+        if (remoteError && [401, 404, 409, 410, 502].includes(response.status)) return { error: remoteError };
+        if (response.status === 404) return { error: "No DOABookPro business matched this Aurriq email." };
         return { error: "DOABookPro could not start account linking right now. Please try again." };
       }
       if (result?.alreadyLinked === true) {
