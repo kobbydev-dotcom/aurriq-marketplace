@@ -108,46 +108,12 @@ http.route({
 			paymentReference: String(paymentReference),
 			activationSecret: secret,
 			transactionId: body?.transactionId ? String(body.transactionId) : undefined,
-			doabookproEmail: typeof body?.doabookproEmail === "string" ? body.doabookproEmail : undefined,
-			doabookproLinkUrl: typeof body?.doabookproLinkUrl === "string" ? body.doabookproLinkUrl : undefined,
 		});
 
 		return new Response(JSON.stringify({ activated: true }), {
 			status: 200,
 			headers: { "Content-Type": "application/json" },
 		});
-	}),
-});
-
-http.route({
-	path: "/doabookpro/business-link-complete",
-	method: "POST",
-	handler: httpAction(async (ctx, request) => {
-		const secret = request.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ?? request.headers.get("x-doabookpro-marketplace-secret") ?? "";
-		const expected = process.env.DOABOOKPRO_MARKETPLACE_SECRET;
-		if (!expected || secret !== expected) return new Response("unauthorized", { status: 401 });
-
-		const body = await request.json().catch(() => null);
-		if (typeof body?.sellerId !== "string" || typeof body?.ownerEmail !== "string" || typeof body?.businessSlug !== "string") {
-			return new Response(JSON.stringify({ error: "missing sellerId, ownerEmail, or businessSlug" }), {
-				status: 400,
-				headers: { "Content-Type": "application/json" },
-			});
-		}
-
-		try {
-			const result = await ctx.runMutation((internal.users as any).completeDoabookproBusinessLink, {
-				sellerId: body.sellerId,
-				ownerEmail: body.ownerEmail,
-				businessSlug: body.businessSlug,
-			});
-			return new Response(JSON.stringify(result), { status: 200, headers: { "Content-Type": "application/json" } });
-		} catch (error) {
-			return new Response(JSON.stringify({ error: error instanceof Error ? error.message : "Business link could not be completed" }), {
-				status: 409,
-				headers: { "Content-Type": "application/json" },
-			});
-		}
 	}),
 });
 
