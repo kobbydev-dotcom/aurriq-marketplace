@@ -74,20 +74,27 @@ export default function StorefrontPage() {
             )}
           </div>
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-light" style={{ fontFamily: "'Cormorant Garamond', serif" }}>{seller.name}</h1>
-              {seller.businessType && (
-                <Badge className="text-[10px] bg-primary/15 text-primary border-primary/30">
-                  {BUSINESS_LABEL[seller.businessType] ?? "Beauty Pro"}
-                </Badge>
-              )}
-              {(seller.serviceTypes ?? []).map((service: string) => (
-                <Badge key={service} variant="secondary" className="text-[10px] capitalize">
-                  {service.replace(/_/g, " ")}
-                </Badge>
-              ))}
-            </div>
-            <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
+            <h1
+              className="text-xl font-light leading-snug line-clamp-2 break-words"
+              style={{ fontFamily: "'Cormorant Garamond', serif" }}
+            >
+              {seller.name}
+            </h1>
+            {(seller.businessType || (seller.serviceTypes ?? []).length > 0) && (
+              <div className="mt-1.5 grid grid-cols-2 sm:grid-cols-3 gap-1.5 max-w-xs">
+                {seller.businessType && (
+                  <Badge className="justify-center text-[10px] bg-primary/15 text-primary border-primary/30">
+                    {BUSINESS_LABEL[seller.businessType] ?? "Beauty Pro"}
+                  </Badge>
+                )}
+                {(seller.serviceTypes ?? []).map((service: string) => (
+                  <Badge key={service} variant="secondary" className="justify-center text-[10px] capitalize">
+                    {service.replace(/_/g, " ")}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground flex-wrap">
               <span>{productCount} product{productCount !== 1 ? "s" : ""}</span>
               <span>·</span>
               <span>{followerCount} follower{followerCount !== 1 ? "s" : ""}</span>
