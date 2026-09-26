@@ -17,10 +17,10 @@ const NETWORK_TO_HUBTEL: Record<string, string> = {
 };
 
 export const MARKETPLACE_VENDOR_PLANS = {
-  monthly: { label: "Monthly", months: 1, direct: 169, partner: 149 },
-  quarterly: { label: "Quarterly", months: 3, direct: 479, partner: 419 },
-  biannual: { label: "Biannual", months: 6, direct: 899, partner: 799 },
-  annual: { label: "Annual", months: 12, direct: 1590, partner: 1399 },
+  monthly: { label: "Monthly", months: 1, amount: 169 },
+  quarterly: { label: "Quarterly", months: 3, amount: 479 },
+  biannual: { label: "Biannual", months: 6, amount: 899 },
+  annual: { label: "Annual", months: 12, amount: 1590 },
 } as const;
 
 export const AURRIQ_ACTIVATION_PAYMENT = {
@@ -44,35 +44,10 @@ const AURRIQ_SUPPORT_EMAIL = "devagyemang@gmail.com";
 
 type MarketplacePlanKey = keyof typeof MARKETPLACE_VENDOR_PLANS;
 
-function normalizeAccountEmail(value: unknown) {
-  return typeof value === "string" ? value.trim().toLowerCase() : "";
-}
-
-function trustedDoabookproLinkUrl(value: unknown) {
-  if (typeof value !== "string") return "";
-  try {
-    const url = new URL(value);
-    const tenantSlug = url.hostname.endsWith(".doabookpro.com")
-      ? url.hostname.slice(0, -".doabookpro.com".length)
-      : "";
-    const tenantHost = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(tenantSlug)
-      && !["admin", "api", "www"].includes(tenantSlug);
-    return url.protocol === "https:"
-      && tenantHost
-      && !url.username
-      && !url.password
-      && !url.hash
-      ? url.toString()
-      : "";
-  } catch {
-    return "";
-  }
-}
-
-function marketplacePlan(key: string, source: string) {
+function marketplacePlan(key: string) {
   const plan = MARKETPLACE_VENDOR_PLANS[key as MarketplacePlanKey];
   if (!plan) return null;
-  return { ...plan, amount: source === "doabookpro" ? plan.partner : plan.direct };
+  return plan;
 }
 
 function supportLine() {
@@ -91,8 +66,7 @@ export const startMarketplaceSubscription = action({
     const user: any = await ctx.runQuery(api.users.current, {});
     if (!user) throw new Error("Please sign in before activating your seller account");
 
-    const source = user.doabookproLinkVerifiedAt && user.doabookproSlug ? "doabookpro" : "direct";
-    const plan = marketplacePlan(args.planKey, source);
+    const plan = marketplacePlan(args.planKey);
     if (!plan) throw new Error("Invalid marketplace subscription plan");
 
     const superadminUrl = process.env.DOABOOKPRO_MARKETPLACE_REQUEST_URL;
@@ -107,7 +81,7 @@ export const startMarketplaceSubscription = action({
     await ctx.runMutation(internal.payments.createMarketplaceSubscription, {
       userId: user._id,
       planKey: args.planKey,
-      source,
+      source: "direct",
       amount: plan.amount,
       paymentReference: reference,
     });
@@ -129,7 +103,7 @@ export const startMarketplaceSubscription = action({
         planLabel: plan.label,
         amount: plan.amount,
         months: plan.months,
-        source,
+        source: "direct",
         requestType: isTopUp ? "top_up" : "activation",
       }),
     });
@@ -184,8 +158,6 @@ export const applyMarketplaceSubscription = internalMutation({
     paymentReference: v.string(),
     status: v.union(v.literal("success"), v.literal("failed")),
     transactionId: v.optional(v.string()),
-    doabookproEmail: v.optional(v.string()),
-    doabookproLinkUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const user: any = await ctx.db
@@ -226,7 +198,7 @@ export const applyMarketplaceSubscription = internalMutation({
       return;
     }
 
-    const plan = marketplacePlan(user.marketplacePlan ?? "", user.marketplaceSubscriptionSource ?? "direct");
+    const plan = marketplacePlan(user.marketplacePlan ?? "");
     if (!plan) {
       throw new Error(`Marketplace subscription plan not found for payment reference ${args.paymentReference}`);
     }
@@ -246,14 +218,9 @@ export const applyMarketplaceSubscription = internalMutation({
     });
 
     const wasRenewal = user.marketplaceSubscriptionStatus === "locked" || (typeof user.marketplacePaidUntil === "number" && user.marketplacePaidUntil > Date.now());
-    const doabookproLinkUrl = !wasRenewal
-      && normalizeAccountEmail(user.email)
-      && normalizeAccountEmail(user.email) === normalizeAccountEmail(args.doabookproEmail)
-      ? trustedDoabookproLinkUrl(args.doabookproLinkUrl)
-      : "";
     const smsMessage = wasRenewal
       ? "Thank you for renewing your Aurriq seller account. Your vendor dashboard has been reinstated, and nothing was lost. You can pick up from where you left off."
-      : `Congratulations from Aurriq! Your storefront is ready. Welcome to the Aurriq family. We are excited to see your shop grow and wish you many successful sales.${doabookproLinkUrl ? ` Link your DOABookPro business: ${doabookproLinkUrl}` : ""}`;
+      : "Congratulations from Aurriq! Your storefront is ready. Welcome to the Aurriq family. We are excited to see your shop grow and wish you many successful sales.";
 
     if (user.phone) {
       await ctx.scheduler.runAfter(0, internal.sms.sendSMS, {
@@ -346,7 +313,6 @@ export const runMarketplaceSubscriptionMaintenance = internalMutation({
           marketplaceLockedAt: now,
         });
 
-
         const lockMessage = `${seller.name ?? "Aurriq vendor"}, your Aurriq seller subscription has expired and your vendor dashboard is now locked. Buyers can still check out. Renew with Top Up using your shop/vendor name as reference. ${supportLine()}`;
         if (seller.phone) {
           await ctx.scheduler.runAfter(0, internal.sms.sendSMS, { to: seller.phone, message: lockMessage });
@@ -362,10 +328,6 @@ export const runMarketplaceSubscriptionMaintenance = internalMutation({
             ctaUrl: `${process.env.AURRIQ_PUBLIC_URL ?? "https://aurriq.doabookpro.com"}/seller/dashboard`,
           });
         }
-
-
-
-
 
         await ctx.scheduler.runAfter(0, internal.notifications.createNotification, {
           userId: seller._id,
@@ -400,10 +362,6 @@ export const runMarketplaceSubscriptionMaintenance = internalMutation({
         await ctx.scheduler.runAfter(0, internal.sms.sendSMS, { to: seller.phone, message });
       }
 
-
-
-
-
       const warnEmail = (seller as any).notifyEmail ?? seller.email;
       if (warnEmail) {
         await ctx.scheduler.runAfter(0, internal.mail.sendEmail, {
@@ -436,8 +394,6 @@ export const activateMarketplaceSubscriptionFromSuperadmin = mutation({
     paymentReference: v.string(),
     activationSecret: v.string(),
     transactionId: v.optional(v.string()),
-    doabookproEmail: v.optional(v.string()),
-    doabookproLinkUrl: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const expected = process.env.DOABOOKPRO_MARKETPLACE_SECRET;
@@ -448,8 +404,6 @@ export const activateMarketplaceSubscriptionFromSuperadmin = mutation({
       paymentReference: args.paymentReference,
       status: "success",
       transactionId: args.transactionId,
-      doabookproEmail: args.doabookproEmail,
-      doabookproLinkUrl: args.doabookproLinkUrl,
     });
     return { activated: true };
   },

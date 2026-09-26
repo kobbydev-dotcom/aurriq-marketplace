@@ -3,40 +3,30 @@ import { useAction } from "convex/react";
 import { api } from "../../../../../convex/_generated/api.js";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog.tsx";
 import { Button } from "@/components/ui/button.tsx";
-import { Check, Loader2, Store, Sparkles, Landmark, Smartphone } from "lucide-react";
+import { Check, Loader2, Store, Landmark, Smartphone } from "lucide-react";
 import { toast } from "sonner";
 
 type PlanKey = "monthly" | "quarterly" | "biannual" | "annual";
 
-const DIRECT_PLANS: Record<PlanKey, { label: string; amount: number; months: number; note: string }> = {
+const PLANS: Record<PlanKey, { label: string; amount: number; months: number; note: string }> = {
   monthly: { label: "Monthly", amount: 169, months: 1, note: "Flexible month-to-month access" },
   quarterly: { label: "Quarterly", amount: 479, months: 3, note: "Save GHS 28 vs monthly" },
   biannual: { label: "Biannual", amount: 899, months: 6, note: "Save GHS 115 vs monthly" },
   annual: { label: "Annual", amount: 1590, months: 12, note: "Best value — save GHS 438" },
 };
 
-const PARTNER_PLANS: Record<PlanKey, { label: string; amount: number; months: number; note: string }> = {
-  monthly: { label: "Monthly partner", amount: 149, months: 1, note: "DOABookPro partner rate" },
-  quarterly: { label: "Quarterly partner", amount: 419, months: 3, note: "Partner savings included" },
-  biannual: { label: "Biannual partner", amount: 799, months: 6, note: "Partner savings included" },
-  annual: { label: "Annual partner", amount: 1399, months: 12, note: "Best partner value" },
-};
-
 export default function VendorSubscriptionDialog({
   open,
   onOpenChange,
-  isDoaBookProPartner,
   pendingPaymentReference,
   intent = "activation",
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  isDoaBookProPartner: boolean;
   pendingPaymentReference?: string;
   intent?: "activation" | "top_up";
 }) {
   const startSubscription = useAction((api.payments as any).startMarketplaceSubscription);
-  const plans = isDoaBookProPartner ? PARTNER_PLANS : DIRECT_PLANS;
   const [selected, setSelected] = useState<PlanKey>("annual");
   const [loading, setLoading] = useState(false);
   const [paymentRequest, setPaymentRequest] = useState<any>(null);
@@ -46,7 +36,7 @@ export default function VendorSubscriptionDialog({
     try {
       const result = await startSubscription({
         planKey: selected,
-        source: isDoaBookProPartner ? "doabookpro" : "direct",
+        source: "direct",
       });
       localStorage.setItem("aurriq_pending_vendor_payment", result.reference);
       setPaymentRequest(result);
@@ -65,21 +55,14 @@ export default function VendorSubscriptionDialog({
             <Store className="size-5 text-primary" /> {intent === "top_up" ? "Top up your Aurriq storefront" : "Activate your Aurriq storefront"}
           </DialogTitle>
           <DialogDescription>
-            Marketplace access is a separate vendor subscription from any DOABookPro booking subscription.
+            Marketplace access is a separate vendor subscription.
           </DialogDescription>
         </DialogHeader>
-
-        {!paymentRequest && isDoaBookProPartner && (
-          <div className="rounded-lg border border-primary/30 bg-primary/5 p-3 text-sm flex gap-2">
-            <Sparkles className="size-4 text-primary shrink-0 mt-0.5" />
-            <span>You’re linked to DOABookPro, so partner pricing is applied automatically. Your booking subscription remains separate.</span>
-          </div>
-        )}
 
         {!paymentRequest ? (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-2">
-              {(Object.entries(plans) as [PlanKey, (typeof plans)[PlanKey]][]).map(([key, plan]) => (
+              {(Object.entries(PLANS) as [PlanKey, (typeof PLANS)[PlanKey]][]).map(([key, plan]) => (
                 <button
                   key={key}
                   type="button"

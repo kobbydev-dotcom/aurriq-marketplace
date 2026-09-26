@@ -11,21 +11,6 @@ function normalizeBusinessSlug(value: unknown) {
   return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug) ? slug : "";
 }
 
-function isTrustedDoabookproVerificationUrl(value: string) {
-  try {
-    const url = new URL(value);
-    const tenantHost = url.hostname.endsWith(".doabookpro.com")
-      && normalizeBusinessSlug(url.hostname.slice(0, -".doabookpro.com".length))
-      && !["admin", "api", "www"].includes(url.hostname.slice(0, -".doabookpro.com".length));
-    const serviceHost = ["doabookpro.com", "admin.doabookpro.com"].includes(url.hostname);
-    return url.protocol === "https:" && (serviceHost || tenantHost) && !url.username && !url.password && !url.hash
-      ? url.toString()
-      : "";
-  } catch {
-    return "";
-  }
-}
-
 function currentUserWithVerifiedDoabookproLink(user: any) {
   if (!user) return null;
   return {
@@ -648,103 +633,6 @@ export const updateProfile = mutation({
     }
 
     return true;
-  },
-});
-
-// Authenticated sellers ask DOABookPro to begin a credential-confirmed linking
-// flow. The password is entered only on DOABookPro and is never sent to Aurriq.
-export const createDoabookproBusinessLink = action({
-  args: { repair: v.optional(v.boolean()) },
-  handler: async (ctx, args) => {
-    try {
-      const user: any = await ctx.runQuery(api.users.current, {});
-      if (!user) return { error: "Sign in to link your DOABookPro business." };
-      if (!user.isSeller && user.role !== "seller") return { error: "This action is available from your Aurriq seller account." };
-      const sellerEmail = normalizeEmail(user.email);
-      if (!sellerEmail) return { error: "Add an email to your Aurriq account before linking your business." };
-
-      if (user.doabookproLinkVerifiedAt && user.doabookproSlug && !args.repair) {
-        return { alreadyLinked: true, slug: user.doabookproSlug };
-      }
-
-      const activationRequestUrl = process.env.DOABOOKPRO_MARKETPLACE_REQUEST_URL;
-      const secret = process.env.DOABOOKPRO_MARKETPLACE_SECRET;
-      if (!activationRequestUrl || !secret) return { error: "DOABookPro account linking is not configured yet." };
-
-      let createLinkUrl: URL;
-      try {
-        createLinkUrl = new URL(activationRequestUrl);
-      } catch {
-        return { error: "DOABookPro account linking is not configured yet." };
-      }
-      if (createLinkUrl.protocol !== "https:" || createLinkUrl.hostname !== "admin.doabookpro.com" || createLinkUrl.username || createLinkUrl.password || !/\/marketplace-activation-request\/?$/.test(createLinkUrl.pathname)) {
-        return { error: "DOABookPro account linking is not configured yet." };
-      }
-      createLinkUrl.pathname = createLinkUrl.pathname.replace(/\/marketplace-activation-request\/?$/, "/aurriq/create-business-link");
-      createLinkUrl.search = "";
-      createLinkUrl.hash = "";
-
-      const response = await fetch(createLinkUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${secret}` },
-        body: JSON.stringify({ sellerId: String(user._id), sellerEmail }),
-      });
-      const result = await response.json().catch(() => null);
-      if (!response.ok) {
-        const remoteError = typeof result?.error === "string" ? result.error : "";
-        if (remoteError && [401, 404, 409, 410, 502].includes(response.status)) return { error: remoteError };
-        if (response.status === 404) return { error: "No DOABookPro business matched this Aurriq email." };
-        return { error: "DOABookPro could not start account linking right now. Please try again." };
-      }
-      if (result?.alreadyLinked === true) {
-        const businessSlug = normalizeBusinessSlug(result.businessSlug);
-        if (!businessSlug) return { error: "DOABookPro returned an invalid linked business." };
-        return { alreadyLinked: true, slug: businessSlug };
-      }
-      const linkUrl = typeof result?.linkUrl === "string" ? result.linkUrl : "";
-      const trustedLinkUrl = isTrustedDoabookproVerificationUrl(linkUrl);
-      if (!trustedLinkUrl) return { error: "DOABookPro returned an invalid account-link address." };
-      return { linkUrl: trustedLinkUrl, alreadyLinked: false };
-    } catch (error) {
-      console.error("Unable to start DOABookPro business link", error);
-      return { error: "We could not start the secure DOABookPro link. Please try again; if it repeats, contact support with the time of your attempt." };
-    }
-  },
-});
-
-// Private callback target. The HTTP route authenticates the DOABookPro service
-// before invoking this transaction, which checks the email and slug uniqueness
-// again before binding the verified owner to their existing Aurriq seller ID.
-export const completeDoabookproBusinessLink = internalMutation({
-  args: { sellerId: v.string(), ownerEmail: v.string(), businessSlug: v.string() },
-  handler: async (ctx, args) => {
-    const sellerId = args.sellerId as any;
-    const seller: any = await ctx.db.get(sellerId);
-    const ownerEmail = normalizeEmail(args.ownerEmail);
-    const sellerEmail = normalizeEmail(seller?.email);
-    const businessSlug = normalizeBusinessSlug(args.businessSlug);
-    if (!seller || !ownerEmail || ownerEmail !== sellerEmail || !businessSlug) {
-      throw new Error("The confirmed business owner does not match this Aurriq seller account.");
-    }
-
-    const slugMatches = await ctx.db
-      .query("users")
-      .withIndex("by_doabookpro_slug", (q) => q.eq("doabookproSlug", businessSlug))
-      .collect();
-    if (slugMatches.some((candidate: any) => candidate._id !== seller._id && candidate.doabookproLinkVerifiedAt)) {
-      throw new Error("That DOABookPro business is already linked to another Aurriq account.");
-    }
-
-    if (seller.doabookproLinkVerifiedAt) {
-      if (seller.doabookproSlug !== businessSlug) throw new Error("This Aurriq account is already linked to a different DOABookPro business.");
-      return { linked: true, alreadyLinked: true };
-    }
-
-    await ctx.db.patch(seller._id, {
-      doabookproSlug: businessSlug,
-      doabookproLinkVerifiedAt: Date.now(),
-    });
-    return { linked: true, alreadyLinked: false };
   },
 });
 

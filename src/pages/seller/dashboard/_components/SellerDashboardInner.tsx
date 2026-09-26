@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../../../../convex/_generated/api.js";
 import { ConvexError } from "convex/values";
 import { toast } from "sonner";
 import {
   Plus, Package, TrendingUp, AlertTriangle, ShoppingBag,
   MoreVertical, Pencil, Trash2, ToggleLeft, ToggleRight, Tag, MessageSquare, ArrowLeft,
-  Clock, CheckCircle, Truck, PackageCheck, XCircle, Store, CreditCard, Smartphone, ShieldCheck, Loader2, FileText, Landmark, Users, Send, Save, Lock, CalendarDays, ExternalLink
+  Clock, CheckCircle, Truck, PackageCheck, XCircle, Store, CreditCard, Smartphone, ShieldCheck, Loader2, FileText, Landmark, Users, Send, Save, Lock, CalendarDays
 } from "lucide-react";
 import { Button } from "@/components/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card.tsx";
@@ -51,62 +51,6 @@ import { formatCurrency } from "@/lib/utils.ts";
 
 const AURRIQ_SUPPORT_PHONE = "+233 27 442 1221";
 const AURRIQ_SUPPORT_EMAIL = "devagyemang@gmail.com";
-
-function DoabookproAccountLink({ slug }: { slug?: string }) {
-  const requestBusinessLink = useAction((api.users as any).createDoabookproBusinessLink) as any;
-  const [linking, setLinking] = useState(false);
-  const safeSlug = slug && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug) ? slug : "";
-
-  const handleLink = async (repair = false) => {
-    setLinking(true);
-    try {
-      const result = await requestBusinessLink({ repair });
-      if (typeof result?.error === "string") {
-        toast.error(result.error);
-        return;
-      }
-      if (typeof result?.linkUrl === "string") {
-        window.location.assign(result.linkUrl);
-        return;
-      }
-      const linkedSlug = result?.slug;
-      if (result?.alreadyLinked && typeof linkedSlug === "string" && /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(linkedSlug)) {
-        window.location.assign(`https://${linkedSlug}.doabookpro.com`);
-        return;
-      }
-      toast.error("DOABookPro did not return an account-link address.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Unable to start account linking");
-    } finally {
-      setLinking(false);
-    }
-  };
-
-  return (
-    <div className="rounded-xl border border-primary/30 bg-gradient-to-r from-primary/10 via-card to-card p-4 sm:flex sm:items-center sm:justify-between sm:gap-4">
-      <div className="flex items-start gap-3">
-        <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-primary/15 text-primary"><Store className="size-5" /></div>
-        <div>
-          <p className="font-semibold text-foreground">DOABookPro business connection</p>
-          <p className="mt-1 max-w-2xl text-xs leading-relaxed text-muted-foreground">
-            Confirm your business on DOABookPro to link your booking page and Aurriq shop. Your DOABookPro password stays on DOABookPro.
-          </p>
-        </div>
-      </div>
-      <div className="mt-3 flex shrink-0 flex-wrap items-center gap-2 sm:mt-0">
-        {safeSlug && (
-          <a href={"https://" + safeSlug + ".doabookpro.com"} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-md border border-primary/30 bg-background px-3 py-2 text-sm font-medium text-primary hover:bg-primary/5">
-            Visit linked booking page <ExternalLink className="size-4" />
-          </a>
-        )}
-        <Button onClick={() => handleLink(Boolean(safeSlug))} disabled={linking} variant={safeSlug ? "outline" : "default"} className="gap-2">
-          {linking ? <Loader2 className="size-4 animate-spin" /> : <Store className="size-4" />}
-          {linking ? "Connecting..." : safeSlug ? "Repair connection" : "Link my business"}
-        </Button>
-      </div>
-    </div>
-  );
-}
 
 function StockBadge({ stock, threshold }: { stock: number; threshold: number }) {
   if (stock === 0) return <Badge variant="destructive" className="text-[10px]">Out of Stock</Badge>;
@@ -732,7 +676,7 @@ export default function SellerDashboardInner() {
   const activity = useQuery(getMyActivity, {});
   const unreadMessages = useQuery(getTotalUnreadCount, {}) as number | undefined;
   const subscriptionState = useQuery(getSubscriptionState, {}) as any;
-  
+
   const updateProduct = useMutation(updateProductEndpoint) as any;
   const deleteProduct = useMutation(deleteProductEndpoint) as any;
   const updateProfile = useMutation(updateProfileEndpoint) as any;
@@ -841,7 +785,6 @@ export default function SellerDashboardInner() {
         <VendorSubscriptionDialog
           open={subscriptionOpen}
           onOpenChange={setSubscriptionOpen}
-          isDoaBookProPartner={Boolean((currentUser as any)?.doabookproSlug)}
           pendingPaymentReference={(currentUser as any)?.marketplaceSubscriptionStatus === "payment_pending" ? (currentUser as any)?.marketplacePaymentReference : undefined}
           intent="activation"
         />
@@ -866,7 +809,6 @@ export default function SellerDashboardInner() {
         <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 text-sm text-muted-foreground">
           Once your renewal is approved, you will receive SMS and email confirmation. Nothing is deleted, so you can pick up from where you left off.
         </div>
-        <DoabookproAccountLink slug={(currentUser as any)?.doabookproSlug} />
         <Button size="lg" onClick={() => setSubscriptionOpen(true)} className="rounded-full px-10">
           Renew Seller Account
         </Button>
@@ -876,7 +818,6 @@ export default function SellerDashboardInner() {
         <VendorSubscriptionDialog
           open={subscriptionOpen}
           onOpenChange={setSubscriptionOpen}
-          isDoaBookProPartner={Boolean((currentUser as any)?.doabookproSlug)}
           pendingPaymentReference={(currentUser as any)?.marketplaceSubscriptionStatus === "payment_pending" ? (currentUser as any)?.marketplacePaymentReference : undefined}
           intent="top_up"
         />
@@ -909,10 +850,6 @@ export default function SellerDashboardInner() {
             <Plus className="size-4" /> Add Product
           </Button>
         </div>
-      </div>
-
-      <div className="mb-6">
-        <DoabookproAccountLink slug={(currentUser as any)?.doabookproSlug} />
       </div>
 
       {subscriptionState?.isExpiringSoon && (
@@ -1121,7 +1058,6 @@ export default function SellerDashboardInner() {
       <VendorSubscriptionDialog
         open={subscriptionOpen}
         onOpenChange={setSubscriptionOpen}
-        isDoaBookProPartner={Boolean((currentUser as any)?.doabookproSlug)}
         pendingPaymentReference={(currentUser as any)?.marketplaceSubscriptionStatus === "payment_pending" ? (currentUser as any)?.marketplacePaymentReference : undefined}
         intent="top_up"
       />
