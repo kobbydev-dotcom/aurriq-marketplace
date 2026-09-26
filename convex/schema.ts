@@ -39,6 +39,11 @@ export default defineSchema({
     doabookproSlug: v.optional(v.string()),
     // Set only after DOABookPro confirms the owner password and calls back.
     doabookproLinkVerifiedAt: v.optional(v.number()),
+
+    // Self-declared DOABookPro client booking subdomain (businessname.doabookpro.com).
+    // Purely a display/link field — no verification step, unlike doabookproSlug above.
+    bookingSubdomain: v.optional(v.string()),
+
     // Separate Aurriq marketplace vendor entitlement. This is intentionally
     // independent from any DOABookPro booking subscription.
     marketplaceSubscriptionStatus: v.optional(v.string()),

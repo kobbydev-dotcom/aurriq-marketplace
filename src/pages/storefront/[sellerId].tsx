@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { useMutation, useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { useParams, Link } from "react-router-dom";
-import { Package, MapPin, Star, ExternalLink, Store } from "lucide-react";
+import { Package, MapPin, Star, ExternalLink, Store, CalendarCheck } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -81,6 +81,11 @@ export default function StorefrontPage() {
                   {BUSINESS_LABEL[seller.businessType] ?? "Beauty Pro"}
                 </Badge>
               )}
+              {(seller.serviceTypes ?? []).map((service: string) => (
+                <Badge key={service} variant="secondary" className="text-[10px] capitalize">
+                  {service.replace(/_/g, " ")}
+                </Badge>
+              ))}
             </div>
             <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
               <span>{productCount} product{productCount !== 1 ? "s" : ""}</span>
@@ -94,11 +99,24 @@ export default function StorefrontPage() {
               )}
             </div>
           </div>
-          <Button asChild size="sm" className="gap-1.5 shrink-0">
-            <a href={marketplaceUrl} target="_blank" rel="noreferrer">
-              <ExternalLink className="size-3.5" /> Open in marketplace
-            </a>
-          </Button>
+          <div className="flex flex-col gap-2 shrink-0 items-stretch">
+            {seller.bookingSubdomain && (
+              <Button
+                asChild
+                size="sm"
+                className="gap-1.5 bg-gradient-to-r from-primary to-primary/80 shadow-md shadow-primary/20"
+              >
+                <a href={`https://${seller.bookingSubdomain}.doabookpro.com`} target="_blank" rel="noreferrer">
+                  <CalendarCheck className="size-3.5" /> Book Me
+                </a>
+              </Button>
+            )}
+            <Button asChild size="sm" variant="secondary" className="gap-1.5">
+              <a href={marketplaceUrl} target="_blank" rel="noreferrer">
+                <ExternalLink className="size-3.5" /> Open in marketplace
+              </a>
+            </Button>
+          </div>
         </div>
       </div>
 

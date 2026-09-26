@@ -11,6 +11,19 @@ function normalizeBusinessSlug(value: unknown) {
   return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(slug) ? slug : "";
 }
 
+
+
+function normalizeBookingSubdomain(value: unknown) {
+  const raw = typeof value === "string" ? value.trim().toLowerCase() : "";
+  // Strip a full URL or the .doabookpro.com suffix if someone pastes it in by mistake.
+  const cleaned = raw
+    .replace(/^https?:\/\//, "")
+    .replace(/\.doabookpro\.com.*$/, "")
+    .replace(/\/.*$/, "");
+  return /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/.test(cleaned) ? cleaned : "";
+}
+
+
 function currentUserWithVerifiedDoabookproLink(user: any) {
   if (!user) return null;
   return {
@@ -304,13 +317,17 @@ export const getStorefront = query({
         .collect();
       seller = sellers.find((candidate: any) => candidate.doabookproLinkVerifiedAt) ?? null;
     }
+
     const isActiveVendor = Boolean(
       seller
       && (seller.isSeller === true || seller.role === "seller")
       && seller.marketplaceSubscriptionStatus === "active"
       && !(typeof seller.marketplacePaidUntil === "number" && seller.marketplacePaidUntil < Date.now())
     );
-    if (!isActiveVendor || (args.slug && !seller.doabookproLinkVerifiedAt)) return null;
+    // The DOABookPro embed (looked up by slug) still requires an active, verified vendor.
+    // A plain profile visit (looked up by sellerId) works for any Aurriq member.
+    if (!seller) return null;
+    if (args.slug && (!isActiveVendor || !seller.doabookproLinkVerifiedAt)) return null;
 
     const products = await ctx.db
       .query("products")
@@ -354,9 +371,12 @@ export const getStorefront = query({
         name: seller.name,
         image: await resolveUserImage(ctx, seller),
         businessType: seller.businessType,
+        serviceTypes: seller.serviceTypes ?? [],
         isVerified: seller.isVerified,
         locationLabel: seller.locationShared ? seller.locationLabel : undefined,
         doabookproSlug: seller.doabookproLinkVerifiedAt ? seller.doabookproSlug : undefined,
+        bookingSubdomain: seller.bookingSubdomain || undefined,
+        isActiveVendor,
       },
       productCount: active.length,
       followerCount: followers.length,
@@ -554,6 +574,7 @@ export const updateProfile = mutation({
     latitude: v.optional(v.number()),
     longitude: v.optional(v.number()),
     locationShared: v.optional(v.boolean()),
+    bookingSubdomain: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     const identity = await ctx.auth.getUserIdentity();
@@ -620,6 +641,10 @@ export const updateProfile = mutation({
     if (typeof args.latitude === "number") patch.latitude = args.latitude;
     if (typeof args.longitude === "number") patch.longitude = args.longitude;
     if (typeof args.locationShared === "boolean") patch.locationShared = args.locationShared;
+        if (typeof args.bookingSubdomain === "string") {
+      const trimmed = args.bookingSubdomain.trim();
+      patch.bookingSubdomain = trimmed ? normalizeBookingSubdomain(trimmed) : "";
+    }
     if (typeof args.isSeller === "boolean") patch.isSeller = args.isSeller;
     if (args.role === "seller") patch.isSeller = true;
     if (identityEmail && !user?.email) patch.email = identityEmail;

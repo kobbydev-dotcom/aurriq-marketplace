@@ -79,6 +79,7 @@ export default function ProfilePage() {
   const [locationLabel, setLocationLabel] = useState("");
   const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [locationShared, setLocationShared] = useState(false);
+  const [bookingSubdomain, setBookingSubdomain] = useState("");
   const [locating, setLocating] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
@@ -116,6 +117,7 @@ export default function ProfilePage() {
       setCustomServiceDescription((user as any).customServiceDescription ?? "");
       setLocationLabel((user as any).locationLabel ?? "");
       setLocationShared((user as any).locationShared ?? false);
+      setBookingSubdomain((user as any).bookingSubdomain ?? "");
       if (typeof (user as any).latitude === "number" && typeof (user as any).longitude === "number") {
         setCoords({ lat: (user as any).latitude, lng: (user as any).longitude });
       }
@@ -175,6 +177,7 @@ export default function ProfilePage() {
         latitude: coords?.lat,
         longitude: coords?.lng,
         locationShared,
+        bookingSubdomain: bookingSubdomain.trim() || "",
       });
       if ((user as any)?.marketplacePaymentReference) {
         try {
@@ -542,6 +545,52 @@ export default function ProfilePage() {
                 />
               </div>
 
+              <Button onClick={handleSave} disabled={isLoading || !fullName.trim()}>
+                {isLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
+                {isLoading ? "Saving..." : "Save Changes"}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Client Booking Link */}
+          <Card className="border-primary/30 bg-gradient-to-br from-primary/5 via-transparent to-transparent">
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <Store className="size-5 text-primary" /> Client Booking Link
+              </CardTitle>
+              <CardDescription>
+                Have a DOABookPro booking page? Add it here so visitors to your profile can tap "Book Me" and go straight to your booking page.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label>Your booking subdomain</Label>
+                <div className="flex items-stretch rounded-lg border border-input bg-background overflow-hidden focus-within:ring-2 focus-within:ring-ring">
+                  <input
+                    type="text"
+                    placeholder="yourbusinessname"
+                    value={bookingSubdomain}
+                    onChange={(e) =>
+                      setBookingSubdomain(
+                        e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "")
+                      )
+                    }
+                    className="min-w-0 flex-1 bg-transparent px-3 py-2 text-sm outline-none"
+                  />
+                  <span className="flex items-center bg-muted px-3 text-sm text-muted-foreground select-none">
+                    .doabookpro.com
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  This should match your DOABookPro client booking page exactly, e.g. <span className="font-medium text-foreground">elletressparlour.doabookpro.com</span>.
+                </p>
+                {bookingSubdomain && (
+                  <p className="text-xs text-primary">
+                    Your Book Me button will link to{" "}
+                    <span className="font-medium">{bookingSubdomain}.doabookpro.com</span>
+                  </p>
+                )}
+              </div>
               <Button onClick={handleSave} disabled={isLoading || !fullName.trim()}>
                 {isLoading && <Loader2 className="mr-2 size-4 animate-spin" />}
                 {isLoading ? "Saving..." : "Save Changes"}
